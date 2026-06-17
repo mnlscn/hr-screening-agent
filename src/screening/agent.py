@@ -6,7 +6,7 @@ from anthropic import Anthropic
 from screening.config import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, MODEL
 from screening.extraction import CandidateExtractor
 from screening.models import CandidateProfile
-from screening.prompt import build_system_prompt
+from screening.prompt import OPENING_MESSAGE, build_system_prompt
 from screening.utils import count_tokens
 
 
@@ -24,6 +24,15 @@ class ChatAgent:
         self.messages = []
         self.profile = CandidateProfile()
         self.last_extraction_error: Exception | None = None
+
+    def start(self) -> AgentStream:
+        if self.messages:
+            return AgentStream(chunks=iter(()))
+
+        self.messages.append({"role": "assistant", "content": OPENING_MESSAGE})
+        self.last_extraction_error = None
+
+        return AgentStream(chunks=iter([OPENING_MESSAGE]))
 
     def stream(self, user_input: str) -> AgentStream:
         self.messages.append({"role": "user", "content": user_input})
@@ -43,7 +52,7 @@ class ChatAgent:
                 model=MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
                 system=build_system_prompt(self.profile),
-                messages=self.messages,
+                messages=self._messages_for_api(),
             ) as stream:
                 for text in stream.text_stream:
                     chunks.append(text)
@@ -55,6 +64,22 @@ class ChatAgent:
 
         self.messages.append({"role": "assistant", "content": "".join(chunks)})
         self._extract_profile()
+
+    def _messages_for_api(self) -> list[dict[str, str]]:
+        if not self.messages or self.messages[0]["role"] != "assistant":
+            return self.messages
+
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Context: Lucia already sent the first recruiting outreach "
+                    "message to the candidate. Continue the screening chat using "
+                    "the transcript below."
+                ),
+            },
+            *self.messages,
+        ]
 
     def _extract_profile(self) -> None:
         self.last_extraction_error = None

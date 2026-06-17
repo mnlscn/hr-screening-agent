@@ -1,10 +1,16 @@
 import unittest
 
 from screening.models import CandidateProfile, DeliveryExperience
-from screening.prompt import build_system_prompt, get_next_field
+from screening.prompt import OPENING_MESSAGE, build_system_prompt, get_next_field
 
 
 class PromptTest(unittest.TestCase):
+    def test_opening_message_matches_recruiter_outreach_flow(self):
+        self.assertIn("solicitud", OPENING_MESSAGE)
+        self.assertIn("conductor/a de reparto", OPENING_MESSAGE)
+        self.assertIn("asistente de IA", OPENING_MESSAGE)
+        self.assertEqual(OPENING_MESSAGE.count("?"), 1)
+
     def test_missing_fields_drive_next_question_goal(self):
         profile = CandidateProfile(
             full_name="Giacomo Ortiz",
@@ -44,4 +50,3 @@ class PromptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

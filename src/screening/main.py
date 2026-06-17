@@ -12,12 +12,16 @@ def main() -> None:
     agent = ChatAgent(api_key=os.getenv(ANTHROPIC_API_KEY_ENV))
 
     print("Chatbot ready! Type 'quit' or 'exit' to end the conversation.\n")
+    print("Lucia: ", end="", flush=True)
+    for chunk in agent.start().chunks:
+        print(chunk, end="", flush=True)
+    print("\n")
 
     while True:
         user_input = input("You: ")
 
         if user_input.lower() in ["quit", "exit"]:
-            if agent.messages:
+            if any(message["role"] == "user" for message in agent.messages):
                 try:
                     output_path = append_candidate_session(
                         profile=agent.profile,
