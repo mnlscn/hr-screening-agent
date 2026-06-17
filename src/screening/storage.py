@@ -28,4 +28,3 @@ def append_candidate_session(
         file.write("\n")
 
     return output_path
-
