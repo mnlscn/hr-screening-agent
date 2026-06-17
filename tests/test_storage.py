@@ -1,0 +1,148 @@
+import sqlite3
+from typing import cast
+from uuid import UUID
+
+from anthropic.types import MessageParam
+
+from screening.models import CandidateProfile, DeliveryExperience
+from screening.storage import (
+    append_candidate_message,
+    append_candidate_messages,
+    create_candidate,
+    init_database,
+    load_agent_state,
+    load_candidate,
+    load_candidate_messages,
+    replace_candidate_messages,
+    save_candidate_profile,
+    save_candidate_session,
+)
+
+
+def test_init_database_is_idempotent(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+
+    init_database(db_path)
+    init_database(db_path)
+
+    with sqlite3.connect(db_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        migrations = connection.execute(
+            "SELECT version FROM schema_migrations"
+        ).fetchall()
+
+    assert {"candidates", "messages", "schema_migrations"}.issubset(tables)
+    assert migrations == [(1,)]
+
+
+def test_create_candidate_generates_id_and_empty_profile(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+
+    candidate_id = create_candidate(db_path=db_path)
+
+    UUID(candidate_id)
+    loaded = load_candidate(candidate_id, db_path=db_path)
+
+    assert loaded is not None
+    assert loaded.id == candidate_id
+    assert loaded.status == "active"
+    assert loaded.profile.model_dump(mode="json") == CandidateProfile().model_dump(
+        mode="json"
+    )
+
+
+def test_candidate_profile_round_trips_and_updates_queryable_columns(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+    candidate_id = create_candidate(db_path=db_path)
+    profile = CandidateProfile(
+        full_name="Maria Garcia",
+        raw_drivers_license="yes",
+        drivers_license="Yes",
+        raw_city_zone="Madrid",
+        city_zone="Madrid",
+        city_zone_status="Matched",
+        conversation_language="Spanish",
+        availability="Full-time",
+        preferred_schedule="Morning",
+        prior_delivery_experience=DeliveryExperience(years=2, platform="Glovo"),
+        start_date="next Monday",
+    )
+
+    save_candidate_profile(candidate_id, profile, db_path=db_path)
+
+    loaded = load_candidate(candidate_id, db_path=db_path)
+    assert loaded is not None
+    assert loaded.status == "completed"
+    assert loaded.completed_at is not None
+    assert loaded.profile.model_dump(mode="json") == profile.model_dump(mode="json")
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT full_name,
+                   city_zone,
+                   delivery_experience_years,
+                   delivery_experience_platform,
+                   is_complete
+            FROM candidates
+            WHERE id = ?
+            """,
+            (candidate_id,),
+        ).fetchone()
+
+    assert row == ("Maria Garcia", "Madrid", 2.0, "Glovo", 1)
+
+
+def test_messages_preserve_order_when_replaced_and_appended(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+    candidate_id = create_candidate(db_path=db_path)
+    messages = [
+        cast(MessageParam, {"role": "assistant", "content": "Hola"}),
+        cast(MessageParam, {"role": "user", "content": "Estoy lista"}),
+    ]
+
+    replace_candidate_messages(candidate_id, messages, db_path=db_path)
+
+    assert load_candidate_messages(candidate_id, db_path=db_path) == messages
+
+    replacement = [cast(MessageParam, {"role": "user", "content": "Resume"})]
+    replace_candidate_messages(candidate_id, replacement, db_path=db_path)
+    append_candidate_message(
+        candidate_id,
+        cast(MessageParam, {"role": "assistant", "content": "Seguimos"}),
+        db_path=db_path,
+    )
+    append_candidate_messages(
+        candidate_id,
+        [cast(MessageParam, {"role": "user", "content": "Vale"})],
+        db_path=db_path,
+    )
+
+    assert load_candidate_messages(candidate_id, db_path=db_path) == [
+        cast(MessageParam, {"role": "user", "content": "Resume"}),
+        cast(MessageParam, {"role": "assistant", "content": "Seguimos"}),
+        cast(MessageParam, {"role": "user", "content": "Vale"}),
+    ]
+
+
+def test_save_candidate_session_creates_loadable_agent_state(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+    profile = CandidateProfile(full_name="Luis Perez")
+    messages = [
+        cast(MessageParam, {"role": "assistant", "content": "Hola"}),
+        cast(MessageParam, {"role": "user", "content": "Soy Luis Perez"}),
+    ]
+
+    saved = save_candidate_session(profile, messages, db_path=db_path)
+    state = load_agent_state(saved.candidate_id, db_path=db_path)
+
+    assert state is not None
+    assert state.candidate_id == saved.candidate_id
+    assert state.profile.model_dump(mode="json") == profile.model_dump(mode="json")
+    assert state.messages == messages
+    assert state.status == "active"
