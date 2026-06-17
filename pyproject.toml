@@ -1,0 +1,21 @@
+[project]
+name = "screening"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Manuel Scionti", email = "93007030+mnlscn@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.109.2",
+    "load-dotenv>=0.1.0",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+screening = "screening.main:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
