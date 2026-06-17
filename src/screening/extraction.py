@@ -1,6 +1,7 @@
 import json
 
 from anthropic import Anthropic
+from anthropic.types import MessageParam
 
 from screening.config import EXTRACTION_MAX_TOKENS, MODEL, SERVICE_AREAS
 from screening.models import CandidateProfile
@@ -14,7 +15,7 @@ class CandidateExtractor:
 
     def extract(
         self,
-        messages: list[dict[str, str]],
+        messages: list[MessageParam],
         current_profile: CandidateProfile,
     ) -> CandidateProfile:
         response = self.client.messages.create(
@@ -34,7 +35,7 @@ class CandidateExtractor:
 
     def _build_prompt(
         self,
-        messages: list[dict[str, str]],
+        messages: list[MessageParam],
         current_profile: CandidateProfile,
     ) -> str:
         return json.dumps(

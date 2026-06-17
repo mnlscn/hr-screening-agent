@@ -2,13 +2,15 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from anthropic.types import MessageParam
+
 from screening.config import CANDIDATES_JSONL_PATH
 from screening.models import CandidateProfile
 
 
 def append_candidate_session(
     profile: CandidateProfile,
-    transcript: list[dict[str, str]],
+    transcript: list[MessageParam],
     path: str = CANDIDATES_JSONL_PATH,
 ) -> Path:
     output_path = Path(path)

@@ -1,6 +1,13 @@
-def count_tokens(messages):
+from anthropic.types import MessageParam
+
+
+def count_tokens(messages: list[MessageParam]) -> int:
     """Approximate tokens so memory pruning works without a tokenizer dependency."""
-    return sum(len(message["content"]) // 4 + 1 for message in messages)
+    total = 0
+    for message in messages:
+        content = message["content"]
+        total += len(content) // 4 + 1 if isinstance(content, str) else 1
+    return total
 
 
 def extract_text(response):

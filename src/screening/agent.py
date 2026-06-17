@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from collections.abc import Iterator
 
 from anthropic import Anthropic
+from anthropic.types import MessageParam
 
 from screening.config import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, MODEL
 from screening.extraction import CandidateExtractor
@@ -21,7 +22,7 @@ class ChatAgent:
     def __init__(self, api_key: str | None = None) -> None:
         self.client = Anthropic(api_key=api_key)
         self.extractor = CandidateExtractor(self.client)
-        self.messages = []
+        self.messages: list[MessageParam] = []
         self.profile = CandidateProfile()
         self.last_extraction_error: Exception | None = None
 
@@ -65,7 +66,7 @@ class ChatAgent:
         self.messages.append({"role": "assistant", "content": "".join(chunks)})
         self._extract_profile()
 
-    def _messages_for_api(self) -> list[dict[str, str]]:
+    def _messages_for_api(self) -> list[MessageParam]:
         if not self.messages or self.messages[0]["role"] != "assistant":
             return self.messages
 
