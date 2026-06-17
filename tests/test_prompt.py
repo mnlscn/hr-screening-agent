@@ -92,7 +92,9 @@ def test_service_area_questions_are_deflected_in_chat_prompt():
 
     assert "Never list, suggest, confirm, or deny available service areas" in prompt
     assert "ask which city or zone in Spain or Mexico they want to work in" in prompt
-    assert "Do not say it works, is supported, is available, or is not available" in prompt
+    assert (
+        "Do not say it works, is supported, is available, or is not available" in prompt
+    )
 
 
 def test_license_and_city_questions_are_scoped_to_spain_and_mexico():

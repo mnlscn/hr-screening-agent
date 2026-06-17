@@ -161,14 +161,14 @@ def test_no_delivery_experience_is_complete_experience_answer():
 
 
 def test_no_delivery_experience_text_normalizes_to_zero_years():
-    experience = DeliveryExperience(years="no experience", platform=None)
+    experience = DeliveryExperience(years=unchecked("no experience"), platform=None)
 
     assert experience.years == 0
     assert experience.is_complete()
 
 
 def test_nope_delivery_experience_text_normalizes_to_zero_years():
-    experience = DeliveryExperience(years="nope", platform=None)
+    experience = DeliveryExperience(years=unchecked("nope"), platform=None)
 
     assert experience.years == 0
     assert experience.is_complete()

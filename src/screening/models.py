@@ -32,7 +32,9 @@ PROFILE_UPDATE_FIELDS = REQUIRED_FIELDS + (
 def has_first_and_last_name(value: str | None) -> bool:
     if value is None:
         return False
-    parts = [part for part in value.split() if any(character.isalpha() for character in part)]
+    parts = [
+        part for part in value.split() if any(character.isalpha() for character in part)
+    ]
     return len(parts) >= 2
 
 
