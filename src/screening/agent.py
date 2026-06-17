@@ -6,7 +6,7 @@ from anthropic import Anthropic
 from screening.config import MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS, MODEL
 from screening.extraction import CandidateExtractor
 from screening.models import CandidateProfile
-from screening.prompt import SYSTEM_PROMPT
+from screening.prompt import build_system_prompt
 from screening.utils import count_tokens
 
 
@@ -42,7 +42,7 @@ class ChatAgent:
             with self.client.messages.stream(
                 model=MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
-                system=SYSTEM_PROMPT,
+                system=build_system_prompt(self.profile),
                 messages=self.messages,
             ) as stream:
                 for text in stream.text_stream:

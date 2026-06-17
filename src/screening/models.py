@@ -5,7 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from screening.config import SERVICE_AREAS
 
 
-DriverLicense = Literal["Yes", "No"]
+DriverLicense = Literal["Yes", "No", "Pending", "Unknown"]
+CityZoneStatus = Literal["Matched", "Needs clarification", "Unsupported"]
 Availability = Literal["Full-time", "Part-time", "Weekends"]
 PreferredSchedule = Literal["Morning", "Afternoon", "Evening", "Flexible"]
 
@@ -17,6 +18,12 @@ REQUIRED_FIELDS = (
     "preferred_schedule",
     "prior_delivery_experience",
     "start_date",
+)
+
+PROFILE_UPDATE_FIELDS = REQUIRED_FIELDS + (
+    "raw_drivers_license",
+    "raw_city_zone",
+    "city_zone_status",
 )
 
 
@@ -49,8 +56,11 @@ class CandidateProfile(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     full_name: str | None = None
+    raw_drivers_license: str | None = None
     drivers_license: DriverLicense | None = None
+    raw_city_zone: str | None = None
     city_zone: str | None = None
+    city_zone_status: CityZoneStatus | None = None
     availability: Availability | None = None
     preferred_schedule: PreferredSchedule | None = None
     prior_delivery_experience: DeliveryExperience | None = None
@@ -59,8 +69,16 @@ class CandidateProfile(BaseModel):
     is_disqualified: bool = False
     disqualification_reasons: list[str] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)
+    clarification_fields: list[str] = Field(default_factory=list)
 
-    @field_validator("full_name", "city_zone", "start_date", mode="before")
+    @field_validator(
+        "full_name",
+        "raw_drivers_license",
+        "raw_city_zone",
+        "city_zone",
+        "start_date",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_text(cls, value):
         if value is None:
@@ -81,6 +99,46 @@ class CandidateProfile(BaseModel):
             return "Yes"
         if normalized in {"no", "n", "false"}:
             return "No"
+        if normalized in {"pending", "in progress", "taking it soon", "tramitando"}:
+            return "Pending"
+        if normalized in {"unknown", "unclear", "not clear"}:
+            return "Unknown"
+        if any(
+            phrase in normalized
+            for phrase in (
+                "taking it",
+                "next week",
+                "soon",
+                "in process",
+                "in progress",
+                "sacando",
+                "en tramite",
+                "en trámite",
+                "la semana que viene",
+            )
+        ):
+            return "Pending"
+        if any(
+            phrase in normalized
+            for phrase in (
+                "i have one",
+                "i have it",
+                "got one",
+                "tengo carnet",
+                "tengo licencia",
+                "tengo permiso",
+            )
+        ):
+            return "Yes"
+        return value
+
+    @field_validator("city_zone")
+    @classmethod
+    def validate_canonical_city_zone(cls, value):
+        if value is None:
+            return None
+        if value not in SERVICE_AREAS:
+            raise ValueError("city_zone must be a canonical value from SERVICE_AREAS")
         return value
 
     @field_validator("availability", mode="before")
@@ -126,6 +184,13 @@ class CandidateProfile(BaseModel):
 
     @model_validator(mode="after")
     def refresh_status(self) -> Self:
+        city_zone_status = self.city_zone_status
+        if city_zone_status is None:
+            if self.city_zone:
+                city_zone_status = "Matched"
+            elif self.raw_city_zone:
+                city_zone_status = "Needs clarification"
+
         missing_fields = []
         for field in REQUIRED_FIELDS:
             value = getattr(self, field)
@@ -134,27 +199,38 @@ class CandidateProfile(BaseModel):
             elif field == "prior_delivery_experience" and not value.is_complete():
                 missing_fields.append(field)
 
+        clarification_fields = []
+        if self.drivers_license in {"Pending", "Unknown"}:
+            clarification_fields.append("drivers_license")
+        if city_zone_status == "Needs clarification":
+            clarification_fields.append("city_zone")
+
         reasons = []
         if self.drivers_license == "No":
             reasons.append("driver_license_no")
-        if self.city_zone and not self.is_service_area(self.city_zone):
+        if city_zone_status == "Unsupported":
             reasons.append("outside_service_area")
 
+        object.__setattr__(self, "city_zone_status", city_zone_status)
         object.__setattr__(self, "missing_fields", missing_fields)
+        object.__setattr__(self, "clarification_fields", clarification_fields)
         object.__setattr__(self, "disqualification_reasons", reasons)
-        object.__setattr__(self, "is_complete", not missing_fields)
+        object.__setattr__(
+            self,
+            "is_complete",
+            not missing_fields and not clarification_fields,
+        )
         object.__setattr__(self, "is_disqualified", bool(reasons))
         return self
 
-    @staticmethod
-    def is_service_area(city_zone: str) -> bool:
-        normalized = city_zone.strip().lower()
-        return normalized in {area.lower() for area in SERVICE_AREAS}
-
     def merge(self, updates: "CandidateProfile") -> "CandidateProfile":
         current = self.model_dump()
-        for field in REQUIRED_FIELDS:
+        for field in PROFILE_UPDATE_FIELDS:
             value = getattr(updates, field)
             if value is not None:
                 current[field] = value
+
+        if updates.city_zone_status in {"Needs clarification", "Unsupported"}:
+            current["city_zone"] = updates.city_zone
+
         return CandidateProfile.model_validate(current)
