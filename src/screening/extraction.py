@@ -3,10 +3,10 @@ import json
 from anthropic import Anthropic
 from anthropic.types import MessageParam
 
-from screening.config import EXTRACTION_MAX_TOKENS, MODEL, SERVICE_AREAS
+from screening.config import EXTRACTION_MAX_TOKENS, MODEL
 from screening.models import CandidateProfile
 from screening.prompt import EXTRACTION_SYSTEM_PROMPT
-from screening.utils import extract_text
+from screening.utils import extract_text, load_service_area_names
 
 
 class CandidateExtractor:
@@ -40,7 +40,7 @@ class CandidateExtractor:
     ) -> str:
         return json.dumps(
             {
-                "service_areas": SERVICE_AREAS,
+                "service_areas": load_service_area_names(),
                 "current_profile": current_profile.model_dump(mode="json"),
                 "transcript": messages,
                 "required_output_shape": {

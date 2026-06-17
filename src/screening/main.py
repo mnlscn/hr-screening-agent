@@ -11,7 +11,6 @@ def main() -> None:
     load_dotenv()
     agent = ChatAgent(api_key=os.getenv(ANTHROPIC_API_KEY_ENV))
 
-    print("Chatbot ready! Type 'quit' or 'exit' to end the conversation.\n")
     print("Lucia: ", end="", flush=True)
     for chunk in agent.start().chunks:
         print(chunk, end="", flush=True)

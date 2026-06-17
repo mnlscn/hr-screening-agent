@@ -15,7 +15,7 @@ def test_valid_complete_profile():
         full_name="Maria Garcia",
         drivers_license=unchecked("yes"),
         raw_city_zone="Madrid",
-        city_zone="Madrid Centro",
+        city_zone="Madrid",
         city_zone_status="Matched",
         availability=unchecked("full time"),
         preferred_schedule=unchecked("morning"),
@@ -50,6 +50,14 @@ def test_driver_license_no_disqualifies_internally():
     assert "driver_license_no" in profile.disqualification_reasons
 
 
+def test_driver_license_nope_disqualifies_internally():
+    profile = CandidateProfile(drivers_license=unchecked("nope"))
+
+    assert profile.drivers_license == "No"
+    assert profile.is_disqualified
+    assert "driver_license_no" in profile.disqualification_reasons
+
+
 def test_driver_license_pending_needs_clarification():
     profile = CandidateProfile(
         raw_drivers_license="I'm taking it next week",
@@ -71,34 +79,34 @@ def test_driver_license_natural_yes_is_normalized():
 def test_llm_normalized_barcelona_is_eligible():
     profile = CandidateProfile(
         raw_city_zone="Barcelona",
-        city_zone="Barcelona Eixample",
+        city_zone="Barcelona",
         city_zone_status="Matched",
     )
 
     assert not profile.is_disqualified
-    assert profile.city_zone == "Barcelona Eixample"
+    assert profile.city_zone == "Barcelona"
 
 
 def test_llm_normalized_bcn_is_eligible():
     profile = CandidateProfile(
         raw_city_zone="BCN",
-        city_zone="Barcelona Eixample",
+        city_zone="Barcelona",
         city_zone_status="Matched",
     )
 
     assert not profile.is_disqualified
-    assert profile.city_zone == "Barcelona Eixample"
+    assert profile.city_zone == "Barcelona"
 
 
 def test_llm_normalized_typo_is_eligible():
     profile = CandidateProfile(
         raw_city_zone="barcelna",
-        city_zone="Barcelona Eixample",
+        city_zone="Barcelona",
         city_zone_status="Matched",
     )
 
     assert not profile.is_disqualified
-    assert profile.city_zone == "Barcelona Eixample"
+    assert profile.city_zone == "Barcelona"
 
 
 def test_ambiguous_city_needs_clarification():
@@ -123,9 +131,9 @@ def test_unsupported_city_disqualifies_internally():
     assert "outside_service_area" in profile.disqualification_reasons
 
 
-def test_non_canonical_city_zone_is_rejected():
+def test_zone_level_city_zone_is_rejected():
     with pytest.raises(ValidationError):
-        CandidateProfile(city_zone="Barcelona")
+        CandidateProfile(city_zone="Barcelona Eixample")
 
 
 def test_partial_profile_tracks_missing_fields():
@@ -134,3 +142,27 @@ def test_partial_profile_tracks_missing_fields():
     assert not profile.is_complete
     assert "full_name" not in profile.missing_fields
     assert "drivers_license" in profile.missing_fields
+
+
+def test_no_delivery_experience_is_complete_experience_answer():
+    profile = CandidateProfile(
+        prior_delivery_experience=DeliveryExperience(years=0, platform=None)
+    )
+
+    assert profile.prior_delivery_experience is not None
+    assert profile.prior_delivery_experience.is_complete()
+    assert "prior_delivery_experience" not in profile.missing_fields
+
+
+def test_no_delivery_experience_text_normalizes_to_zero_years():
+    experience = DeliveryExperience(years="no experience", platform=None)
+
+    assert experience.years == 0
+    assert experience.is_complete()
+
+
+def test_nope_delivery_experience_text_normalizes_to_zero_years():
+    experience = DeliveryExperience(years="nope", platform=None)
+
+    assert experience.years == 0
+    assert experience.is_complete()

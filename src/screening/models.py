@@ -2,7 +2,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from screening.config import SERVICE_AREAS
+from screening.utils import load_service_area_names
 
 
 DriverLicense = Literal["Yes", "No", "Pending", "Unknown"]
@@ -38,6 +38,17 @@ class DeliveryExperience(BaseModel):
     def normalize_years(cls, value):
         if value in (None, ""):
             return None
+        if isinstance(value, str) and value.strip().lower() in {
+            "no",
+            "nope",
+            "nah",
+            "none",
+            "ninguna",
+            "ninguno",
+            "sin experiencia",
+            "no experience",
+        }:
+            return 0
         return value
 
     @field_validator("platform", mode="before")
@@ -49,6 +60,8 @@ class DeliveryExperience(BaseModel):
         return value or None
 
     def is_complete(self) -> bool:
+        if self.years == 0:
+            return True
         return self.years is not None and bool(self.platform)
 
 
@@ -97,7 +110,7 @@ class CandidateProfile(BaseModel):
         normalized = str(value).strip().lower()
         if normalized in {"yes", "y", "true", "si", "sí"}:
             return "Yes"
-        if normalized in {"no", "n", "false"}:
+        if normalized in {"no", "n", "nope", "nah", "false"}:
             return "No"
         if normalized in {"pending", "in progress", "taking it soon", "tramitando"}:
             return "Pending"
@@ -137,8 +150,8 @@ class CandidateProfile(BaseModel):
     def validate_canonical_city_zone(cls, value):
         if value is None:
             return None
-        if value not in SERVICE_AREAS:
-            raise ValueError("city_zone must be a canonical value from SERVICE_AREAS")
+        if value not in load_service_area_names():
+            raise ValueError("city_zone must be a canonical service area")
         return value
 
     @field_validator("availability", mode="before")
