@@ -2,7 +2,9 @@ from screening.models import CandidateProfile, DeliveryExperience
 from screening.prompt import (
     EXTRACTION_SYSTEM_PROMPT,
     OPENING_MESSAGE,
+    SYSTEM_PROMPT,
     build_system_prompt,
+    detect_latest_user_language,
     get_next_field,
 )
 
@@ -21,9 +23,31 @@ def test_extraction_prompt_lives_with_prompts():
     assert "Return strict JSON only" in EXTRACTION_SYSTEM_PROMPT
     assert "service_areas" in EXTRACTION_SYSTEM_PROMPT
     assert "drivers_license" in EXTRACTION_SYSTEM_PROMPT
+    assert "conversation_language" in EXTRACTION_SYSTEM_PROMPT
+    assert '"English", "Spanish", "Mixed"' in EXTRACTION_SYSTEM_PROMPT
     assert "valid for driving in Spain or Mexico" in EXTRACTION_SYSTEM_PROMPT
     assert "car, truck, and motorbike" in EXTRACTION_SYSTEM_PROMPT
     assert "set years to 0 and platform to null" in EXTRACTION_SYSTEM_PROMPT
+
+
+def test_chat_prompt_handles_code_switching():
+    assert "code-switch" in SYSTEM_PROMPT
+    assert "dominant language of their latest message" in SYSTEM_PROMPT
+    assert "answer in Spanish" in SYSTEM_PROMPT
+
+
+def test_prompt_instructs_english_reply_for_english_latest_message():
+    prompt = build_system_prompt(
+        CandidateProfile(full_name="Marco"),
+        latest_user_message="my name is marco",
+    )
+
+    assert '"latest_user_language": "English"' in prompt
+    assert "Reply in English for the next assistant message" in prompt
+
+
+def test_latest_user_language_detects_code_switching():
+    assert detect_latest_user_language("Sí, I can start next week") == "Mixed"
 
 
 def test_missing_fields_drive_next_question_goal():
@@ -45,6 +69,17 @@ def test_missing_fields_drive_next_question_goal():
     assert "Do not ask for phone number, email" in prompt
     assert "Do not close or wrap up" in prompt
     assert "Service areas are internal" in prompt
+
+
+def test_single_name_drives_surname_follow_up():
+    profile = CandidateProfile(full_name="Marco")
+
+    assert get_next_field(profile) == "full_name"
+
+    prompt = build_system_prompt(profile, latest_user_message="my name is marco")
+
+    assert '"next_field_to_collect": "full_name"' in prompt
+    assert "ask for their surname or last name" in prompt
 
 
 def test_service_area_questions_are_deflected_in_chat_prompt():

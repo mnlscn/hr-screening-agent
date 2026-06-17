@@ -1,4 +1,5 @@
 import json
+import re
 
 SYSTEM_PROMPT = """\
 You are Lucia, Grupo Sazon's bilingual (Spanish/English) recruiting assistant. \
@@ -13,8 +14,10 @@ promise pay, shifts, schedules, or visa sponsorship. If asked about those, say a
 recruiter will cover the details. You only collect job-relevant basics; you never ask \
 for ID numbers or other sensitive data.
 
-Language: reply in the language the candidate is writing in. Default to Spanish; if \
-they write in English, answer in English.
+Language: reply in the language the candidate is currently writing in. Default to \
+Spanish. If they write in English, answer in English. If they code-switch between \
+Spanish and English, follow the dominant language of their latest message. If the \
+dominant language is unclear, answer in Spanish.
 
 How you talk (this matters):
 - One short message. One question at a time. 1 to 2 sentences.
@@ -50,11 +53,19 @@ For city:
 - If the candidate clearly names a place outside the list, set city_zone to null and city_zone_status to "Unsupported".
 
 Allowed values:
+- conversation_language: "English", "Spanish", "Mixed", or null
 - drivers_license: "Yes", "No", "Pending", "Unknown", or null
 - city_zone: one exact city from service_areas, or null
 - city_zone_status: "Matched", "Needs clarification", "Unsupported", or null
 - availability: "Full-time", "Part-time", "Weekends", or null
 - preferred_schedule: "Morning", "Afternoon", "Evening", "Flexible", or null
+
+For conversation_language:
+- Describe the whole candidate session, not only the latest message.
+- Use "Spanish" when the candidate conversation is predominantly Spanish.
+- Use "English" when the candidate conversation is predominantly English.
+- Use "Mixed" when the candidate meaningfully uses both English and Spanish across the session or code-switches inside messages.
+- Use null only when there is not enough candidate text to infer the language.
 
 For drivers_license:
 - Use "Yes" only when the candidate has a license that is valid for driving in Spain or Mexico, depending on where they want to work.
@@ -71,7 +82,7 @@ If the candidate says they have no prior delivery experience, set years to 0 and
 """
 
 REQUIRED_FIELD_LABELS = {
-    "full_name": "full name",
+    "full_name": "full name, including surname or last name",
     "drivers_license": "whether they have a driver's license valid for Spain or Mexico",
     "city_zone": "city or zone in Spain or Mexico where they want to work",
     "availability": "availability: full-time, part-time, or weekends",
@@ -86,12 +97,16 @@ CLARIFICATION_FIELD_LABELS = {
 }
 
 
-def build_system_prompt(profile) -> str:
+def build_system_prompt(profile, latest_user_message: str | None = None) -> str:
     next_field = get_next_field(profile)
     profile_context = {
         "profile": profile.model_dump(mode="json"),
         "next_field_to_collect": next_field,
         "next_question_goal": format_field_goal(next_field),
+        "latest_user_language": detect_latest_user_language(latest_user_message),
+        "next_reply_language_instruction": format_reply_language_instruction(
+            latest_user_message
+        ),
     }
 
     return "\n\n".join(
@@ -101,7 +116,9 @@ def build_system_prompt(profile) -> str:
 Screening flow:
 - Use the current candidate profile below as the source of truth.
 - Ask exactly one question per reply.
+- Follow next_reply_language_instruction for the next assistant message.
 - First clarify any clarification_fields, then collect missing_fields in order.
+- If next_field_to_collect is full_name and the profile already has only one name, ask for their surname or last name.
 - Service areas are internal. Never list, suggest, confirm, or deny available service areas.
 - Driver roles are only in Spain and Mexico. When asking about license validity, ask whether their car, truck, or motorbike license is valid for driving in Spain or Mexico.
 - Accepted vehicle license types are car, truck, and motorbike. Never say motorbike is not accepted.
@@ -132,3 +149,73 @@ def format_field_goal(field: str | None) -> str | None:
     if field is None:
         return None
     return CLARIFICATION_FIELD_LABELS.get(field) or REQUIRED_FIELD_LABELS.get(field)
+
+
+def detect_latest_user_language(message: str | None) -> str:
+    if not message:
+        return "Unknown"
+
+    normalized = message.lower()
+    words = set(re.findall(r"[a-záéíóúüñ]+", normalized))
+    english_markers = {
+        "can",
+        "do",
+        "english",
+        "have",
+        "i",
+        "is",
+        "like",
+        "my",
+        "name",
+        "prefer",
+        "ready",
+        "there",
+        "work",
+        "yes",
+    }
+    spanish_markers = {
+        "ciudad",
+        "conducir",
+        "es",
+        "espanol",
+        "españa",
+        "gracias",
+        "hola",
+        "licencia",
+        "manejar",
+        "mexico",
+        "méxico",
+        "nombre",
+        "prefiero",
+        "si",
+        "sí",
+        "trabajar",
+        "zona",
+    }
+
+    english_score = len(words & english_markers)
+    spanish_score = len(words & spanish_markers)
+    if re.search(r"[¿¡áéíóúüñ]", normalized):
+        spanish_score += 1
+
+    if english_score and spanish_score:
+        return "Mixed"
+    if english_score > spanish_score:
+        return "English"
+    if spanish_score > english_score:
+        return "Spanish"
+    return "Unknown"
+
+
+def format_reply_language_instruction(message: str | None) -> str:
+    language = detect_latest_user_language(message)
+    if language == "English":
+        return "Reply in English for the next assistant message."
+    if language == "Spanish":
+        return "Reply in Spanish for the next assistant message."
+    if language == "Mixed":
+        return (
+            "The latest user message mixes English and Spanish. Reply in the "
+            "dominant language of that message."
+        )
+    return "Default to Spanish unless the candidate clearly asks for English."

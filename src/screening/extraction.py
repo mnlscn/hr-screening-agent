@@ -44,6 +44,7 @@ class CandidateExtractor:
                 "current_profile": current_profile.model_dump(mode="json"),
                 "transcript": messages,
                 "required_output_shape": {
+                    "conversation_language": None,
                     "full_name": None,
                     "raw_drivers_license": None,
                     "drivers_license": None,

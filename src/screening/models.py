@@ -9,6 +9,7 @@ DriverLicense = Literal["Yes", "No", "Pending", "Unknown"]
 CityZoneStatus = Literal["Matched", "Needs clarification", "Unsupported"]
 Availability = Literal["Full-time", "Part-time", "Weekends"]
 PreferredSchedule = Literal["Morning", "Afternoon", "Evening", "Flexible"]
+ConversationLanguage = Literal["English", "Spanish", "Mixed"]
 
 REQUIRED_FIELDS = (
     "full_name",
@@ -24,7 +25,15 @@ PROFILE_UPDATE_FIELDS = REQUIRED_FIELDS + (
     "raw_drivers_license",
     "raw_city_zone",
     "city_zone_status",
+    "conversation_language",
 )
+
+
+def has_first_and_last_name(value: str | None) -> bool:
+    if value is None:
+        return False
+    parts = [part for part in value.split() if any(character.isalpha() for character in part)]
+    return len(parts) >= 2
 
 
 class DeliveryExperience(BaseModel):
@@ -74,6 +83,7 @@ class CandidateProfile(BaseModel):
     raw_city_zone: str | None = None
     city_zone: str | None = None
     city_zone_status: CityZoneStatus | None = None
+    conversation_language: ConversationLanguage | None = None
     availability: Availability | None = None
     preferred_schedule: PreferredSchedule | None = None
     prior_delivery_experience: DeliveryExperience | None = None
@@ -208,6 +218,8 @@ class CandidateProfile(BaseModel):
         for field in REQUIRED_FIELDS:
             value = getattr(self, field)
             if value is None:
+                missing_fields.append(field)
+            elif field == "full_name" and not has_first_and_last_name(value):
                 missing_fields.append(field)
             elif field == "prior_delivery_experience" and not value.is_complete():
                 missing_fields.append(field)

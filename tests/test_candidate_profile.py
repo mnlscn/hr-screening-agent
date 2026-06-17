@@ -144,6 +144,12 @@ def test_partial_profile_tracks_missing_fields():
     assert "drivers_license" in profile.missing_fields
 
 
+def test_single_name_keeps_full_name_missing():
+    profile = CandidateProfile(full_name="Marco")
+
+    assert "full_name" in profile.missing_fields
+
+
 def test_no_delivery_experience_is_complete_experience_answer():
     profile = CandidateProfile(
         prior_delivery_experience=DeliveryExperience(years=0, platform=None)
@@ -166,3 +172,31 @@ def test_nope_delivery_experience_text_normalizes_to_zero_years():
 
     assert experience.years == 0
     assert experience.is_complete()
+
+
+@pytest.mark.parametrize(
+    "conversation_language",
+    ["English", "Spanish", "Mixed"],
+)
+def test_conversation_language_accepts_supported_values(conversation_language: str):
+    profile = CandidateProfile(conversation_language=unchecked(conversation_language))
+
+    assert profile.conversation_language == conversation_language
+
+
+@pytest.mark.parametrize(
+    "conversation_language",
+    ["eng", "esp", "bilingual", "it"],
+)
+def test_conversation_language_rejects_unclear_labels(conversation_language: str):
+    with pytest.raises(ValidationError):
+        CandidateProfile(conversation_language=unchecked(conversation_language))
+
+
+def test_merge_updates_conversation_language():
+    profile = CandidateProfile(conversation_language="Spanish")
+    updates = CandidateProfile(conversation_language="Mixed")
+
+    merged = profile.merge(updates)
+
+    assert merged.conversation_language == "Mixed"
