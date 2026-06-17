@@ -36,6 +36,34 @@ OPENING_MESSAGE = (
     "¿Te viene bien responder unas preguntas rápidas para la primera revisión?"
 )
 
+EXTRACTION_SYSTEM_PROMPT = """\
+You extract structured recruiting screening data from a delivery-driver chat.
+Return strict JSON only. Do not include markdown, comments, or explanations.
+Use null when a field is unknown.
+
+For city and service area:
+- You will receive the exact service_areas list.
+- Infer common aliases, abbreviations, misspellings, accents, and bilingual names.
+- Choose a city_zone only when you are confident it maps to one exact value from service_areas.
+- Never invent a service area outside the list.
+- If the candidate's location is vague, set city_zone to null and city_zone_status to "Needs clarification".
+- If the candidate clearly names a place outside the list, set city_zone to null and city_zone_status to "Unsupported".
+
+Allowed values:
+- drivers_license: "Yes", "No", "Pending", "Unknown", or null
+- city_zone: one exact value from service_areas, or null
+- city_zone_status: "Matched", "Needs clarification", "Unsupported", or null
+- availability: "Full-time", "Part-time", "Weekends", or null
+- preferred_schedule: "Morning", "Afternoon", "Evening", "Flexible", or null
+
+Use drivers_license "Pending" for answers like "I'm taking it next week" or "I'm in the process".
+Use drivers_license "Unknown" when the answer is unclear.
+
+prior_delivery_experience must be an object with:
+- years: number or null
+- platform: string or null
+"""
+
 REQUIRED_FIELD_LABELS = {
     "full_name": "full name",
     "drivers_license": "valid driver's license status",

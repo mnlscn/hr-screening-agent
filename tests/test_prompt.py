@@ -1,7 +1,12 @@
 import unittest
 
 from screening.models import CandidateProfile, DeliveryExperience
-from screening.prompt import OPENING_MESSAGE, build_system_prompt, get_next_field
+from screening.prompt import (
+    EXTRACTION_SYSTEM_PROMPT,
+    OPENING_MESSAGE,
+    build_system_prompt,
+    get_next_field,
+)
 
 
 class PromptTest(unittest.TestCase):
@@ -10,6 +15,11 @@ class PromptTest(unittest.TestCase):
         self.assertIn("conductor/a de reparto", OPENING_MESSAGE)
         self.assertIn("asistente de IA", OPENING_MESSAGE)
         self.assertEqual(OPENING_MESSAGE.count("?"), 1)
+
+    def test_extraction_prompt_lives_with_prompts(self):
+        self.assertIn("Return strict JSON only", EXTRACTION_SYSTEM_PROMPT)
+        self.assertIn("service_areas", EXTRACTION_SYSTEM_PROMPT)
+        self.assertIn("drivers_license", EXTRACTION_SYSTEM_PROMPT)
 
     def test_missing_fields_drive_next_question_goal(self):
         profile = CandidateProfile(
