@@ -1,5 +1,7 @@
 """Tests for application session workflows: start, save, resume, and finalize."""
 
+import json
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -9,6 +11,7 @@ import screening.llm.agent as agent_module
 from screening.llm.agent import ChatAgent
 from screening.domain.models import CandidateProfile, DeliveryExperience
 from screening.llm.prompts.agent import OPENING_MESSAGE
+from screening.observability import configure_logging
 from screening.application.session import (
     finalize_candidate_session,
     resume_candidate_session,
@@ -95,7 +98,7 @@ class FailingSummarizer:
 def anthropic_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str | None]]:
     calls: list[dict[str, str | None]] = []
 
-    def fake_anthropic(*, api_key: str | None = None) -> Any:
+    def fake_anthropic(*, api_key: str | None = None, **_: object) -> Any:
         calls.append({"api_key": api_key})
         return object()
 
@@ -170,6 +173,7 @@ def test_save_current_session_persists_streamed_response(tmp_path):
 
 
 def test_finalize_candidate_session_saves_before_summarizing(tmp_path):
+    log_path = _configure_test_logging(tmp_path)
     db_path = tmp_path / "screening.sqlite3"
     candidate_id = create_candidate(db_path=db_path)
     agent = FakeAgent(candidate_id)
@@ -190,9 +194,13 @@ def test_finalize_candidate_session_saves_before_summarizing(tmp_path):
     assert loaded.hr_summary == "Maria is complete, polite, and ready for HR review."
     assert load_candidate_messages(candidate_id, db_path=db_path) == agent.messages
     assert summarizer.seen_messages == agent.messages
+    events = _log_events(log_path)
+    assert "candidate_session_finalized" in events
+    assert "candidate_summary_completed" in events
 
 
 def test_finalize_candidate_session_records_summary_failure(tmp_path):
+    log_path = _configure_test_logging(tmp_path)
     db_path = tmp_path / "screening.sqlite3"
     candidate_id = create_candidate(db_path=db_path)
     agent = FakeAgent(candidate_id)
@@ -210,3 +218,32 @@ def test_finalize_candidate_session_records_summary_failure(tmp_path):
     assert loaded.bot_label == "needs_review"
     assert loaded.summary_status == "failed"
     assert loaded.summary_error == "bad summary JSON"
+    events = _log_events(log_path)
+    assert "candidate_summary_failed" in events
+    assert "Maria Garcia" not in _log_text(log_path)
+    assert "Soy Maria Garcia" not in _log_text(log_path)
+
+
+def _configure_test_logging(tmp_path: Path) -> Path:
+    log_path = tmp_path / "screening.jsonl"
+    configure_logging(log_path=log_path, include_stderr=False, force=True)
+    return log_path
+
+
+def _read_log_records(log_path: Path) -> list[dict]:
+    return [
+        json.loads(line)["record"]
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+    ]
+
+
+def _log_events(log_path: Path) -> set[str]:
+    return {
+        str(record["extra"]["event"])
+        for record in _read_log_records(log_path)
+        if "event" in record["extra"]
+    }
+
+
+def _log_text(log_path: Path) -> str:
+    return log_path.read_text(encoding="utf-8")

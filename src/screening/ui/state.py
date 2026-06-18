@@ -13,6 +13,7 @@ from screening.application.session import (
     start_candidate_session,
 )
 from screening.domain.models import FINAL_STATUSES
+from screening.observability import bind_context
 from screening.persistence.storage import StoredCandidate, load_candidate
 from screening.ui.constants import AGENT_SESSION_KEY, CANDIDATE_ID_PARAM
 from screening.ui.formatting import format_value
@@ -38,6 +39,10 @@ def get_or_create_agent() -> ChatAgent:
         try:
             agent = resume_candidate_session(candidate_id)
         except ValueError:
+            bind_context(
+                event="candidate_resume_fallback",
+                candidate_id=candidate_id,
+            ).warning("Candidate session not found; starting a new one")
             st.warning("Candidate session not found. Starting a new one.")
             agent = start_candidate_session()
     else:
@@ -147,4 +152,9 @@ def has_api_key() -> bool:
     Returns:
         bool: True when ``ANTHROPIC_API_KEY`` is present and non-empty.
     """
-    return bool(os.getenv(ANTHROPIC_API_KEY_ENV))
+    has_key = bool(os.getenv(ANTHROPIC_API_KEY_ENV))
+    if not has_key:
+        bind_context(event="missing_api_key", env_var=ANTHROPIC_API_KEY_ENV).warning(
+            "Anthropic API key is missing"
+        )
+    return has_key

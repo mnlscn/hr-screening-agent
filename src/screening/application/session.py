@@ -7,6 +7,12 @@ from pathlib import Path
 from screening.llm.agent import ChatAgent
 from screening.config import ANTHROPIC_API_KEY_ENV, SCREENING_DB_PATH, SUMMARY_MODEL
 from screening.domain.models import ACTIVE_STATUS, COMPLETED_STATUS
+from screening.observability import (
+    bind_context,
+    exception_metadata,
+    logger,
+    message_list_metadata,
+)
 from screening.persistence.storage import (
     SavedCandidateSession,
     create_candidate,
@@ -50,6 +56,11 @@ def start_candidate_session(
         ChatAgent: A started agent bound to the new candidate, already saved.
     """
     candidate_id = create_candidate(db_path=db_path)
+    bind_context(
+        event="candidate_session_created",
+        candidate_id=candidate_id,
+        db_path=db_path,
+    ).info("Candidate session created")
     agent = ChatAgent(
         api_key=_resolve_api_key(api_key),
         candidate_id=candidate_id,
@@ -77,11 +88,23 @@ def resume_candidate_session(
         ChatAgent: An agent restored with the candidate's profile and
             transcript.
     """
-    return ChatAgent.from_candidate_id(
+    bind_context(
+        event="candidate_session_resume_started",
+        candidate_id=candidate_id,
+        db_path=db_path,
+    ).info("Candidate session resume started")
+    agent = ChatAgent.from_candidate_id(
         candidate_id,
         api_key=_resolve_api_key(api_key),
         db_path=db_path,
     )
+    bind_context(
+        event="candidate_session_resumed",
+        candidate_id=agent.candidate_id,
+        db_path=db_path,
+        **message_list_metadata(list(agent.messages)),
+    ).info("Candidate session resumed")
+    return agent
 
 
 def save_current_session(
@@ -108,6 +131,13 @@ def save_current_session(
         status=ACTIVE_STATUS,
     )
     agent.candidate_id = saved_session.candidate_id
+    bind_context(
+        event="candidate_session_saved",
+        candidate_id=saved_session.candidate_id,
+        db_path=saved_session.db_path,
+        status=ACTIVE_STATUS,
+        **message_list_metadata(list(agent.messages)),
+    ).info("Candidate session saved")
     return saved_session
 
 
@@ -140,6 +170,13 @@ def finalize_candidate_session(
         status=COMPLETED_STATUS,
     )
     agent.candidate_id = saved_session.candidate_id
+    bind_context(
+        event="candidate_session_finalized",
+        candidate_id=saved_session.candidate_id,
+        db_path=saved_session.db_path,
+        status=COMPLETED_STATUS,
+        **message_list_metadata(list(agent.messages)),
+    ).info("Candidate session finalized")
     summary_status = _generate_and_store_summary(
         agent,
         saved_session,
@@ -179,14 +216,22 @@ def _generate_and_store_summary(
         db_path=saved_session.db_path,
         model=SUMMARY_MODEL,
     )
+    bind_context(
+        event="candidate_summary_pending",
+        candidate_id=saved_session.candidate_id,
+        db_path=saved_session.db_path,
+        model=SUMMARY_MODEL,
+        **message_list_metadata(list(agent.messages)),
+    ).info("Candidate summary marked pending")
     summarizer = summarizer or CandidateSummarizer(agent.client)
 
     try:
-        summary = summarizer.summarize(
-            agent.profile,
-            agent.messages,
-            extraction_failed=agent.last_extraction_error is not None,
-        )
+        with logger.contextualize(candidate_id=saved_session.candidate_id):
+            summary = summarizer.summarize(
+                agent.profile,
+                agent.messages,
+                extraction_failed=agent.last_extraction_error is not None,
+            )
     except Exception as error:
         save_candidate_summary_failure(
             saved_session.candidate_id,
@@ -194,6 +239,14 @@ def _generate_and_store_summary(
             model=SUMMARY_MODEL,
             db_path=saved_session.db_path,
         )
+        bind_context(
+            event="candidate_summary_failed",
+            candidate_id=saved_session.candidate_id,
+            db_path=saved_session.db_path,
+            model=SUMMARY_MODEL,
+            summary_status="failed",
+            **exception_metadata(error),
+        ).exception("Candidate summary generation failed")
         return "failed"
 
     save_candidate_summary(
@@ -203,6 +256,14 @@ def _generate_and_store_summary(
         model=summary.model,
         db_path=saved_session.db_path,
     )
+    bind_context(
+        event="candidate_summary_completed",
+        candidate_id=saved_session.candidate_id,
+        db_path=saved_session.db_path,
+        model=summary.model,
+        summary_status="completed",
+        bot_label=summary.bot_label,
+    ).info("Candidate summary completed")
     return "completed"
 
 

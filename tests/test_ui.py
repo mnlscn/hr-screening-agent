@@ -1,5 +1,6 @@
 """Tests for UI helpers: formatting, analytics logic, and dashboard logic."""
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -523,7 +524,91 @@ def _stored_candidate(
     )
 
 
+def test_describe_chat_error_falls_back_to_generic_message():
+    message = ui_chat.describe_chat_error(ValueError("boom"))
+    assert message == "Lucia could not respond: boom"
+
+
+def test_show_log_panel_enabled_reads_env_flag(monkeypatch):
+    monkeypatch.delenv("SCREENING_SHOW_LOG_PANEL", raising=False)
+    assert not ui_chat.show_log_panel_enabled()
+
+    monkeypatch.setenv("SCREENING_SHOW_LOG_PANEL", "true")
+    assert ui_chat.show_log_panel_enabled()
+
+
+def test_candidate_log_rows_filter_and_format_safe_metadata(tmp_path):
+    log_path = tmp_path / "screening.jsonl"
+    _write_log_line(
+        log_path,
+        candidate_id="candidate-1",
+        event="chat_stream_completed",
+        operation="chat",
+        model="claude-test",
+        duration_ms=12.4,
+        message="Contains Secret Candidate text",
+    )
+    _write_log_line(
+        log_path,
+        candidate_id="other-candidate",
+        event="chat_stream_failed",
+        operation="chat",
+        model="claude-test",
+        exception_type="RuntimeError",
+    )
+
+    rows = ui_chat.candidate_log_rows("candidate-1", log_path=log_path)
+
+    assert rows == [
+        {
+            "time": "2026-01-01 00:00:00.000+00:00",
+            "level": "INFO",
+            "event": "chat_stream_completed",
+            "operation": "chat",
+            "model": "claude-test",
+            "duration_ms": 12.4,
+            "status": "ok",
+            "error": "-",
+        }
+    ]
+    assert "Secret Candidate" not in str(rows)
+
+
 def _run_ui_app():
     import screening.ui.app as ui_app
 
     ui_app.render_app()
+
+
+def _write_log_line(
+    log_path: Path,
+    *,
+    candidate_id: str,
+    event: str,
+    operation: str,
+    model: str,
+    duration_ms: float | None = None,
+    exception_type: str | None = None,
+    message: str = "Log event",
+) -> None:
+    extra: dict[str, object] = {
+        "candidate_id": candidate_id,
+        "event": event,
+        "operation": operation,
+        "model": model,
+    }
+    if duration_ms is not None:
+        extra["duration_ms"] = duration_ms
+    if exception_type is not None:
+        extra["exception_type"] = exception_type
+
+    payload = {
+        "record": {
+            "time": {"repr": "2026-01-01 00:00:00.000+00:00"},
+            "level": {"name": "INFO"},
+            "message": message,
+            "extra": extra,
+        }
+    }
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(f"{json.dumps(payload)}\n")

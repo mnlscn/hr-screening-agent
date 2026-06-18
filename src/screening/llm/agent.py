@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from collections.abc import Iterator
 from pathlib import Path
+from time import perf_counter
 
 from anthropic import Anthropic
 from anthropic.types import MessageParam
@@ -10,13 +11,22 @@ from anthropic.types import MessageParam
 from screening.config import (
     MAX_INPUT_TOKENS,
     MAX_OUTPUT_TOKENS,
+    MAX_RETRIES,
     MODEL,
+    REQUEST_TIMEOUT_SECONDS,
     SCREENING_DB_PATH,
 )
 from screening.domain.models import CandidateProfile
 from screening.llm.extraction import CandidateExtractor
 from screening.llm.prompts.agent import OPENING_MESSAGE, build_system_prompt
 from screening.llm.utils import count_tokens
+from screening.observability import (
+    bind_context,
+    exception_metadata,
+    logger,
+    message_list_metadata,
+    profile_state_metadata,
+)
 
 
 @dataclass(frozen=True)
@@ -73,7 +83,11 @@ class ChatAgent:
             profile (CandidateProfile | None): Existing profile to resume from;
                 defaults to a new empty profile.
         """
-        self.client = Anthropic(api_key=api_key)
+        self.client = Anthropic(
+            api_key=api_key,
+            max_retries=MAX_RETRIES,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
         self.extractor = CandidateExtractor(self.client)
         self.candidate_id = candidate_id
         self.messages: list[MessageParam] = list(messages or [])
@@ -179,6 +193,17 @@ class ChatAgent:
             Exception: Re-raises any error raised while streaming the response.
         """
         chunks = []
+        api_messages = self._messages_for_api()
+        started_at = perf_counter()
+        bind_context(
+            event="chat_stream_started",
+            candidate_id=self.candidate_id,
+            operation="chat",
+            model=MODEL,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+            input_token_estimate=count_tokens(api_messages),
+            **message_list_metadata(list(api_messages)),
+        ).info("Chat stream started")
 
         try:
             with self.client.messages.stream(
@@ -188,20 +213,43 @@ class ChatAgent:
                     self.profile,
                     latest_user_message=self._latest_user_message(),
                 ),
-                messages=self._messages_for_api(),
+                messages=api_messages,
             ) as stream:
                 for text in stream.text_stream:
                     chunks.append(text)
                     yield text
-        except Exception:
+        except Exception as error:
+            rollback_applied = False
             if self.messages and self.messages[-1]["role"] == "user":
                 self.messages.pop()
+                rollback_applied = True
             if previous_profile is not None:
                 self.profile = previous_profile
                 self.last_extraction_error = previous_extraction_error
+            bind_context(
+                event="chat_stream_failed",
+                candidate_id=self.candidate_id,
+                operation="chat",
+                model=MODEL,
+                duration_ms=_duration_ms(started_at),
+                output_chunk_count=len(chunks),
+                output_char_count=sum(len(chunk) for chunk in chunks),
+                rollback_applied=rollback_applied,
+                **exception_metadata(error),
+            ).exception("Chat stream failed")
             raise
 
         self.messages.append({"role": "assistant", "content": "".join(chunks)})
+        bind_context(
+            event="chat_stream_completed",
+            candidate_id=self.candidate_id,
+            operation="chat",
+            model=MODEL,
+            duration_ms=_duration_ms(started_at),
+            output_chunk_count=len(chunks),
+            output_char_count=sum(len(chunk) for chunk in chunks),
+            **message_list_metadata(list(self.messages)),
+        ).info("Chat stream completed")
 
     def _messages_for_api(self) -> list[MessageParam]:
         """Return the transcript adapted for the API's role ordering.
@@ -234,10 +282,37 @@ class ChatAgent:
         unchanged and records the error in ``last_extraction_error``.
         """
         self.last_extraction_error = None
+        started_at = perf_counter()
+        bind_context(
+            event="extraction_started",
+            candidate_id=self.candidate_id,
+            operation="extraction",
+            model=MODEL,
+            input_token_estimate=count_tokens(self.messages),
+            **message_list_metadata(list(self.messages)),
+        ).info("Profile extraction started")
         try:
-            self.profile = self.extractor.extract(self.messages, self.profile)
+            with logger.contextualize(candidate_id=self.candidate_id):
+                self.profile = self.extractor.extract(self.messages, self.profile)
         except Exception as error:
             self.last_extraction_error = error
+            bind_context(
+                event="extraction_failed",
+                candidate_id=self.candidate_id,
+                operation="extraction",
+                model=MODEL,
+                duration_ms=_duration_ms(started_at),
+                **exception_metadata(error),
+            ).exception("Profile extraction failed")
+        else:
+            bind_context(
+                event="extraction_completed",
+                candidate_id=self.candidate_id,
+                operation="extraction",
+                model=MODEL,
+                duration_ms=_duration_ms(started_at),
+                **profile_state_metadata(self.profile),
+            ).info("Profile extraction completed")
 
     def _latest_user_message(self) -> str | None:
         """Return the text of the most recent user message.
@@ -268,6 +343,7 @@ class ChatAgent:
         """
         memory_truncated = False
         input_too_large = False
+        initial_token_estimate = count_tokens(self.messages)
 
         while count_tokens(self.messages) > MAX_INPUT_TOKENS:
             if len(self.messages) > 1:
@@ -277,4 +353,20 @@ class ChatAgent:
                 input_too_large = True
                 break
 
+        if memory_truncated or input_too_large:
+            bind_context(
+                event="memory_pruned",
+                candidate_id=self.candidate_id,
+                memory_truncated=memory_truncated,
+                input_too_large=input_too_large,
+                initial_token_estimate=initial_token_estimate,
+                final_token_estimate=count_tokens(self.messages),
+                max_input_tokens=MAX_INPUT_TOKENS,
+                **message_list_metadata(list(self.messages)),
+            ).warning("Conversation memory pruned")
+
         return memory_truncated, input_too_large
+
+
+def _duration_ms(started_at: float) -> float:
+    return round((perf_counter() - started_at) * 1000, 2)

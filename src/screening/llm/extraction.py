@@ -1,6 +1,7 @@
 """CandidateExtractor: parses screening transcripts into structured profile updates."""
 
 import json
+from time import perf_counter
 
 from anthropic import Anthropic
 from anthropic.types import MessageParam
@@ -10,6 +11,13 @@ from screening.domain.models import CandidateProfile
 from screening.domain.service_areas import load_service_area_names
 from screening.llm.prompts.extraction import EXTRACTION_SYSTEM_PROMPT
 from screening.llm.utils import extract_text, parse_json_object
+from screening.observability import (
+    anthropic_response_metadata,
+    bind_context,
+    exception_metadata,
+    message_list_metadata,
+    profile_state_metadata,
+)
 
 
 class CandidateExtractor:
@@ -48,20 +56,53 @@ class CandidateExtractor:
         Raises:
             json.JSONDecodeError: If the model response is not valid JSON.
         """
-        response = self.client.messages.create(
+        started_at = perf_counter()
+        prompt = self._build_prompt(messages, current_profile)
+        bind_context(
+            event="llm_call_started",
+            operation="extraction",
             model=MODEL,
-            max_tokens=EXTRACTION_MAX_TOKENS,
-            system=EXTRACTION_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": self._build_prompt(messages, current_profile),
-                }
-            ],
-        )
-        payload = parse_json_object(extract_text(response))
-        updates = CandidateProfile.model_validate(payload)
-        return current_profile.merge(updates)
+            max_output_tokens=EXTRACTION_MAX_TOKENS,
+            prompt_char_count=len(prompt),
+            **message_list_metadata(list(messages)),
+        ).info("Extraction LLM call started")
+
+        try:
+            response = self.client.messages.create(
+                model=MODEL,
+                max_tokens=EXTRACTION_MAX_TOKENS,
+                system=EXTRACTION_SYSTEM_PROMPT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            )
+            text = extract_text(response)
+            payload = parse_json_object(text)
+            updates = CandidateProfile.model_validate(payload)
+            merged_profile = current_profile.merge(updates)
+        except Exception as error:
+            bind_context(
+                event="llm_call_failed",
+                operation="extraction",
+                model=MODEL,
+                duration_ms=_duration_ms(started_at),
+                **exception_metadata(error),
+            ).exception("Extraction LLM call failed")
+            raise
+
+        bind_context(
+            event="llm_call_completed",
+            operation="extraction",
+            model=MODEL,
+            duration_ms=_duration_ms(started_at),
+            output_char_count=len(text),
+            **anthropic_response_metadata(response),
+            **profile_state_metadata(merged_profile),
+        ).info("Extraction LLM call completed")
+        return merged_profile
 
     def _build_prompt(
         self,
@@ -104,3 +145,7 @@ class CandidateExtractor:
             },
             ensure_ascii=True,
         )
+
+
+def _duration_ms(started_at: float) -> float:
+    return round((perf_counter() - started_at) * 1000, 2)

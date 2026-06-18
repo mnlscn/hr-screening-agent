@@ -118,6 +118,34 @@ def test_summarizer_uses_metadata_and_full_transcript():
     assert "politeness" in call["system"]
     assert "**Candidate Brief**" in call["system"]
     assert "**Screening Facts**" in call["system"]
+    assert call["output_config"]["format"]["type"] == "json_schema"
+    schema = call["output_config"]["format"]["schema"]
+    assert set(schema["properties"]["bot_label"]["enum"]) == {
+        "eligible",
+        "needs_review",
+        "not_eligible",
+    }
+    assert schema["properties"]["hr_summary"]["type"] == "string"
+
+
+def test_summarizer_uses_structured_output_with_quotes_and_newlines():
+    hr_summary = (
+        "**Candidate Brief**\n"
+        'Maria said "I can start tomorrow" and is applying in Madrid.\n\n'
+        "**Screening Facts**\n"
+        "- License: Valid driver license reported.\n\n"
+        "**Conversation Notes**\n"
+        "- Candidate answered clearly.\n\n"
+        "**Follow-Up Suggestions**\n"
+        "1. Confirm onboarding availability."
+    )
+    client = FakeClient(json.dumps({"bot_label": "eligible", "hr_summary": hr_summary}))
+    summarizer = CandidateSummarizer(client=cast(Any, client))
+
+    summary = summarizer.summarize(complete_profile(), [])
+
+    assert summary.bot_label == "eligible"
+    assert summary.hr_summary == hr_summary
 
 
 def test_summarizer_keeps_incomplete_profile_as_needs_review():

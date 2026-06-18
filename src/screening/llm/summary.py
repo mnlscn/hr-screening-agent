@@ -2,15 +2,64 @@
 
 import json
 from dataclasses import dataclass
-from typing import cast
+from time import perf_counter
 
 from anthropic import Anthropic
-from anthropic.types import MessageParam
+from anthropic.types import MessageParam, OutputConfigParam
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from screening.config import SUMMARY_MAX_TOKENS, SUMMARY_MODEL
-from screening.domain.models import VALID_BOT_LABELS, BotLabel, CandidateProfile
+from screening.domain.models import BotLabel, CandidateProfile
 from screening.llm.prompts.summary import SUMMARY_SYSTEM_PROMPT
-from screening.llm.utils import extract_text, parse_json_object
+from screening.llm.utils import extract_text
+from screening.observability import (
+    anthropic_response_metadata,
+    bind_context,
+    exception_metadata,
+    message_list_metadata,
+    profile_state_metadata,
+)
+
+
+class CandidateSummaryPayload(BaseModel):
+    """Structured LLM output for a candidate summary.
+
+    Attributes:
+        bot_label (BotLabel): Model-proposed triage label.
+        hr_summary (str): Markdown recruiter-facing summary text.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bot_label: BotLabel
+    hr_summary: str
+
+    @field_validator("hr_summary")
+    @classmethod
+    def validate_summary_text(cls, value: str) -> str:
+        """Validate and normalize the generated summary text.
+
+        Args:
+            value (str): Raw summary text from the structured model output.
+
+        Returns:
+            str: Stripped, non-empty summary text.
+
+        Raises:
+            ValueError: If the summary is empty.
+        """
+        value = value.strip()
+        if not value:
+            raise ValueError("hr_summary must be a non-empty string")
+        return value
+
+
+SUMMARY_OUTPUT_CONFIG: OutputConfigParam = {
+    "format": {
+        "type": "json_schema",
+        "schema": CandidateSummaryPayload.model_json_schema(),
+    }
+}
 
 
 @dataclass(frozen=True)
@@ -68,38 +117,73 @@ class CandidateSummarizer:
             CandidateSummary: The reconciled label and HR summary text.
 
         Raises:
-            ValueError: If the model response has an invalid label or an empty
-                summary.
-            json.JSONDecodeError: If the model response is not valid JSON.
+            ValueError: If the model response does not match the structured
+                summary schema.
         """
         baseline_label = determine_bot_label(
             profile,
             extraction_failed=extraction_failed,
         )
-        response = self.client.messages.create(
+        started_at = perf_counter()
+        prompt = self._build_prompt(
+            profile,
+            transcript,
+            baseline_label=baseline_label,
+            extraction_failed=extraction_failed,
+        )
+        bind_context(
+            event="llm_call_started",
+            operation="summary",
             model=SUMMARY_MODEL,
-            max_tokens=SUMMARY_MAX_TOKENS,
-            system=SUMMARY_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": self._build_prompt(
-                        profile,
-                        transcript,
-                        baseline_label=baseline_label,
-                        extraction_failed=extraction_failed,
-                    ),
-                }
-            ],
-        )
-        payload = parse_json_object(extract_text(response))
-        bot_label = _validate_bot_label(payload.get("bot_label"))
-        hr_summary = _validate_summary_text(payload.get("hr_summary"))
+            max_output_tokens=SUMMARY_MAX_TOKENS,
+            baseline_bot_label=baseline_label,
+            extraction_failed=extraction_failed,
+            prompt_char_count=len(prompt),
+            **message_list_metadata(list(transcript)),
+            **profile_state_metadata(profile),
+        ).info("Summary LLM call started")
 
-        return CandidateSummary(
-            bot_label=_resolve_bot_label(profile, baseline_label, bot_label),
-            hr_summary=hr_summary,
+        try:
+            response = self.client.messages.create(
+                model=SUMMARY_MODEL,
+                max_tokens=SUMMARY_MAX_TOKENS,
+                system=SUMMARY_SYSTEM_PROMPT,
+                output_config=SUMMARY_OUTPUT_CONFIG,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            )
+            text = extract_text(response)
+            payload = CandidateSummaryPayload.model_validate_json(text)
+        except Exception as error:
+            bind_context(
+                event="llm_call_failed",
+                operation="summary",
+                model=SUMMARY_MODEL,
+                duration_ms=_duration_ms(started_at),
+                **exception_metadata(error),
+            ).exception("Summary LLM call failed")
+            raise
+
+        summary = CandidateSummary(
+            bot_label=_resolve_bot_label(profile, baseline_label, payload.bot_label),
+            hr_summary=payload.hr_summary,
         )
+        bind_context(
+            event="llm_call_completed",
+            operation="summary",
+            model=SUMMARY_MODEL,
+            duration_ms=_duration_ms(started_at),
+            output_char_count=len(text),
+            hr_summary_char_count=len(payload.hr_summary),
+            model_bot_label=payload.bot_label,
+            final_bot_label=summary.bot_label,
+            **anthropic_response_metadata(response),
+        ).info("Summary LLM call completed")
+        return summary
 
     def _build_prompt(
         self,
@@ -185,40 +269,6 @@ def determine_bot_label(
     return "needs_review"
 
 
-def _validate_bot_label(value: object) -> BotLabel:
-    """Validate that a value is a recognized triage label.
-
-    Args:
-        value (object): Candidate label value from the model response.
-
-    Returns:
-        BotLabel: The validated label.
-
-    Raises:
-        ValueError: If the value is not one of the valid bot labels.
-    """
-    if not isinstance(value, str) or value not in VALID_BOT_LABELS:
-        raise ValueError(f"invalid bot_label: {value!r}")
-    return cast(BotLabel, value)
-
-
-def _validate_summary_text(value: object) -> str:
-    """Validate that a value is a non-empty summary string.
-
-    Args:
-        value (object): Candidate summary text from the model response.
-
-    Returns:
-        str: The stripped, non-empty summary text.
-
-    Raises:
-        ValueError: If the value is not a non-empty string.
-    """
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("hr_summary must be a non-empty string")
-    return value.strip()
-
-
 def _resolve_bot_label(
     profile: CandidateProfile,
     baseline_label: BotLabel,
@@ -242,3 +292,7 @@ def _resolve_bot_label(
     if baseline_label == "not_eligible" and model_label == "eligible":
         return "needs_review"
     return model_label
+
+
+def _duration_ms(started_at: float) -> float:
+    return round((perf_counter() - started_at) * 1000, 2)

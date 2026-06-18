@@ -1,5 +1,7 @@
 """Tests for ChatAgent: streaming, memory pruning, and profile extraction."""
 
+import json
+from pathlib import Path
 from typing import Any
 from typing import cast
 
@@ -9,6 +11,7 @@ from anthropic.types import MessageParam
 import screening.llm.agent as agent_module
 from screening.domain.models import CandidateProfile
 from screening.llm.prompts.agent import OPENING_MESSAGE
+from screening.observability import configure_logging
 from screening.persistence.storage import save_candidate_session
 
 
@@ -21,6 +24,21 @@ class FakeStream:
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
+
+
+class FailingStream:
+    text_stream = iter(())
+
+    def __enter__(self):
+        self.text_stream = self._raise_on_iter()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def _raise_on_iter(self):
+        raise RuntimeError("stream exploded")
+        yield ""
 
 
 class RecordingMessages:
@@ -37,16 +55,31 @@ class RecordingClient:
         self.messages = RecordingMessages()
 
 
+class FailingMessages:
+    def stream(self, **kwargs):
+        return FailingStream()
+
+
+class FailingClient:
+    def __init__(self):
+        self.messages = FailingMessages()
+
+
 class AvailabilityExtractor:
     def extract(self, messages, current_profile):
         return current_profile.merge(CandidateProfile(availability="Full-time"))
+
+
+class FailingExtractor:
+    def extract(self, messages, current_profile):
+        raise ValueError("extract boom")
 
 
 @pytest.fixture
 def anthropic_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str | None]]:
     calls: list[dict[str, str | None]] = []
 
-    def fake_anthropic(*, api_key: str | None = None) -> Any:
+    def fake_anthropic(*, api_key: str | None = None, **_: object) -> Any:
         calls.append({"api_key": api_key})
         return object()
 
@@ -111,10 +144,13 @@ def test_from_candidate_id_reconstructs_agent_state(
 
 
 def test_stream_extracts_latest_user_answer_before_building_prompt(
+    tmp_path,
     anthropic_calls: list[dict[str, str | None]],
 ):
+    log_path = _configure_test_logging(tmp_path)
     agent = agent_module.ChatAgent(
         api_key="test-key",
+        candidate_id="candidate-1",
         profile=CandidateProfile(
             full_name="Elena Diaz Vicuna",
             drivers_license="Yes",
@@ -137,3 +173,76 @@ def test_stream_extracts_latest_user_answer_before_building_prompt(
         in (client.messages.system_prompts[0])
     )
     assert anthropic_calls == [{"api_key": "test-key"}]
+    events = _log_events(log_path)
+    assert "extraction_completed" in events
+    assert "chat_stream_completed" in events
+
+
+def test_stream_failure_logs_rollback_without_message_text(
+    tmp_path,
+    anthropic_calls: list[dict[str, str | None]],
+):
+    log_path = _configure_test_logging(tmp_path)
+    agent = agent_module.ChatAgent(api_key="test-key", candidate_id="candidate-1")
+    agent.client = cast(Any, FailingClient())
+    agent.extractor = cast(Any, AvailabilityExtractor())
+
+    response = agent.stream("Soy Secret Candidate")
+
+    with pytest.raises(RuntimeError, match="stream exploded"):
+        "".join(response.chunks)
+
+    assert agent.messages == []
+    assert agent.profile.availability is None
+    records = _read_log_records(log_path)
+    failure_record = _record_for_event(records, "chat_stream_failed")
+    assert failure_record["extra"]["rollback_applied"] is True
+    assert "Secret Candidate" not in _log_text(log_path)
+
+
+def test_extraction_failure_is_logged_without_message_text(
+    tmp_path,
+    anthropic_calls: list[dict[str, str | None]],
+):
+    log_path = _configure_test_logging(tmp_path)
+    agent = agent_module.ChatAgent(api_key="test-key", candidate_id="candidate-1")
+    agent.client = cast(Any, RecordingClient())
+    agent.extractor = cast(Any, FailingExtractor())
+
+    response = agent.stream("Soy Secret Candidate")
+
+    assert "".join(response.chunks) == "ok"
+    assert isinstance(agent.last_extraction_error, ValueError)
+    events = _log_events(log_path)
+    assert "extraction_failed" in events
+    assert "chat_stream_completed" in events
+    assert "Secret Candidate" not in _log_text(log_path)
+
+
+def _configure_test_logging(tmp_path: Path) -> Path:
+    log_path = tmp_path / "screening.jsonl"
+    configure_logging(log_path=log_path, include_stderr=False, force=True)
+    return log_path
+
+
+def _read_log_records(log_path: Path) -> list[dict]:
+    return [
+        json.loads(line)["record"]
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+    ]
+
+
+def _log_events(log_path: Path) -> set[str]:
+    return {
+        str(record["extra"]["event"])
+        for record in _read_log_records(log_path)
+        if "event" in record["extra"]
+    }
+
+
+def _record_for_event(records: list[dict], event: str) -> dict:
+    return next(record for record in records if record["extra"].get("event") == event)
+
+
+def _log_text(log_path: Path) -> str:
+    return log_path.read_text(encoding="utf-8")

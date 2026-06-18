@@ -4,6 +4,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from screening.llm.agent import ChatAgent
+from screening.observability import configure_logging
 from screening.ui.analytics import render_analytics
 from screening.ui.chat import render_chat_view
 from screening.ui.dashboard import render_dashboard
@@ -19,6 +20,7 @@ def render_app() -> None:
     active.
     """
     load_dotenv()
+    configure_logging()
     st.set_page_config(page_title="Screening", layout="wide")
     apply_styles()
     st.title("Lucia Screening")
