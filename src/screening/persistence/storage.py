@@ -118,9 +118,10 @@ _initialized_paths: set[Path] = set()
 def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
     """Create the database schema if needed and cache that it is initialized.
 
-    Creates the ``candidates`` and ``messages`` tables and their indexes on
-    first use for a given path. Subsequent calls for the same resolved path
-    return immediately.
+    Creates the ``candidates`` and ``messages`` tables and the candidate
+    indexes on first use for a given path. The ``messages`` table is keyed by
+    ``(candidate_id, position)``, which provides its lookup index. Subsequent
+    calls for the same resolved path return immediately.
 
     Args:
         db_path (str | Path): Path to the screening database.
@@ -174,14 +175,13 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
             );
 
             CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 candidate_id TEXT NOT NULL
                     REFERENCES candidates(id) ON DELETE CASCADE,
                 position INTEGER NOT NULL,
                 role TEXT NOT NULL CHECK (role IN ('assistant', 'user')),
                 content_text TEXT NOT NULL,
                 message_json TEXT NOT NULL,
-                UNIQUE (candidate_id, position)
+                PRIMARY KEY (candidate_id, position)
             );
 
             CREATE INDEX IF NOT EXISTS idx_candidates_status
@@ -192,8 +192,6 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 ON candidates(is_complete);
             CREATE INDEX IF NOT EXISTS idx_candidates_is_disqualified
                 ON candidates(is_disqualified);
-            CREATE INDEX IF NOT EXISTS idx_messages_candidate_position
-                ON messages(candidate_id, position);
             """
         )
 
