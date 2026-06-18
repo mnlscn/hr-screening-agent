@@ -1,4 +1,4 @@
-"""Tests for CandidateProfile validation, normalization, and merge logic."""
+"""Tests for CandidateProfile validation and merge logic."""
 
 from typing import Any, cast
 
@@ -15,12 +15,12 @@ def unchecked(value: object) -> Any:
 def test_valid_complete_profile():
     profile = CandidateProfile(
         full_name="Maria Garcia",
-        drivers_license=unchecked("yes"),
+        drivers_license="Yes",
         raw_city_zone="Madrid",
         city_zone="Madrid",
         city_zone_status="Matched",
-        availability=unchecked("full time"),
-        preferred_schedule=unchecked("morning"),
+        availability="Full-time",
+        preferred_schedule="Morning",
         prior_delivery_experience=DeliveryExperience(years=2, platform="Glovo"),
         start_date="next Monday",
     )
@@ -52,30 +52,15 @@ def test_driver_license_no_disqualifies_internally():
     assert "driver_license_no" in profile.disqualification_reasons
 
 
-def test_driver_license_nope_disqualifies_internally():
-    profile = CandidateProfile(drivers_license=unchecked("nope"))
-
-    assert profile.drivers_license == "No"
-    assert profile.is_disqualified
-    assert "driver_license_no" in profile.disqualification_reasons
-
-
 def test_driver_license_pending_needs_clarification():
     profile = CandidateProfile(
         raw_drivers_license="I'm taking it next week",
-        drivers_license=unchecked("I'm taking it next week"),
+        drivers_license="Pending",
     )
 
     assert profile.drivers_license == "Pending"
     assert not profile.is_disqualified
     assert "drivers_license" in profile.clarification_fields
-
-
-def test_driver_license_natural_yes_is_normalized():
-    profile = CandidateProfile(drivers_license=unchecked("I have one"))
-
-    assert profile.drivers_license == "Yes"
-    assert not profile.is_disqualified
 
 
 def test_llm_normalized_barcelona_is_eligible():
@@ -162,18 +147,11 @@ def test_no_delivery_experience_is_complete_experience_answer():
     assert "prior_delivery_experience" not in profile.missing_fields
 
 
-def test_no_delivery_experience_text_normalizes_to_zero_years():
-    experience = DeliveryExperience(years=unchecked("no experience"), platform=None)
-
-    assert experience.years == 0
-    assert experience.is_complete()
-
-
-def test_nope_delivery_experience_text_normalizes_to_zero_years():
-    experience = DeliveryExperience(years=unchecked("nope"), platform=None)
-
-    assert experience.years == 0
-    assert experience.is_complete()
+def test_delivery_experience_extra_keys_are_rejected():
+    with pytest.raises(ValidationError):
+        DeliveryExperience.model_validate(
+            {"years": 1, "platform": "Glovo", "notes": "bike courier"}
+        )
 
 
 @pytest.mark.parametrize(

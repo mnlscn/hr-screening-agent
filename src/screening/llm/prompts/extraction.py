@@ -2,8 +2,7 @@
 
 EXTRACTION_SYSTEM_PROMPT = """\
 You extract structured recruiting screening data from a delivery-driver chat.
-Return strict JSON only. Do not include markdown, comments, or explanations.
-Use null when a field is unknown.
+Use null or omit a field when it is unknown.
 
 For city:
 - You will receive the exact service_areas list.
@@ -12,14 +11,6 @@ For city:
 - Never invent a city outside the list.
 - If the candidate's location is vague, set city_zone to null and city_zone_status to "Needs clarification".
 - If the candidate clearly names a place outside the list, set city_zone to null and city_zone_status to "Unsupported".
-
-Allowed values:
-- conversation_language: "English", "Spanish", "Mixed", or null
-- drivers_license: "Yes", "No", "Pending", "Unknown", or null
-- city_zone: one exact city from service_areas, or null
-- city_zone_status: "Matched", "Needs clarification", "Unsupported", or null
-- availability: "Full-time", "Part-time", "Weekends", or null
-- preferred_schedule: "Morning", "Afternoon", "Evening", "Flexible", or null
 
 For conversation_language:
 - Describe the whole candidate session, not only the latest message.
@@ -35,6 +26,17 @@ For drivers_license:
 - Use "Pending" for answers like "I'm taking it next week" or "I'm in the process".
 - Use "Unknown" when they have a license but it is unclear whether it is valid in Spain or Mexico.
 - Car, truck, and motorbike licenses are all acceptable. Do not require one vehicle type over another.
+
+For availability:
+- Map full-time, full time, and tiempo completo to Full-time.
+- Map part-time, part time, and medio tiempo to Part-time.
+- Map weekends, weekend, fines de semana, and fin de semana to Weekends.
+
+For preferred_schedule:
+- Map morning, mañana, and manana to Morning.
+- Map afternoon and tarde to Afternoon.
+- Map evening and noche to Evening.
+- Map flexible and flex to Flexible.
 
 prior_delivery_experience must be an object with:
 - years: number or null

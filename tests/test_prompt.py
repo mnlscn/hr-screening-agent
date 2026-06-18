@@ -22,16 +22,22 @@ def test_opening_message_matches_recruiter_outreach_flow():
 
 
 def test_extraction_prompt_lives_with_prompts():
-    assert "Return strict JSON only" in EXTRACTION_SYSTEM_PROMPT
+    assert "Return strict JSON only" not in EXTRACTION_SYSTEM_PROMPT
     assert "service_areas" in EXTRACTION_SYSTEM_PROMPT
     assert "drivers_license" in EXTRACTION_SYSTEM_PROMPT
     assert "conversation_language" in EXTRACTION_SYSTEM_PROMPT
-    assert '"English", "Spanish", "Mixed"' in EXTRACTION_SYSTEM_PROMPT
+    assert "Use null or omit a field when it is unknown" in EXTRACTION_SYSTEM_PROMPT
     assert "valid for driving in Spain or Mexico" in EXTRACTION_SYSTEM_PROMPT
     assert "Any driving license issued by an EU country is valid" in (
         EXTRACTION_SYSTEM_PROMPT
     )
     assert "Do not require one vehicle type over another" in EXTRACTION_SYSTEM_PROMPT
+    assert "tiempo completo to Full-time" in EXTRACTION_SYSTEM_PROMPT
+    assert "medio tiempo to Part-time" in EXTRACTION_SYSTEM_PROMPT
+    assert "fines de semana" in EXTRACTION_SYSTEM_PROMPT
+    assert "mañana" in EXTRACTION_SYSTEM_PROMPT
+    assert "tarde to Afternoon" in EXTRACTION_SYSTEM_PROMPT
+    assert "noche to Evening" in EXTRACTION_SYSTEM_PROMPT
     assert "set years to 0 and platform to null" in EXTRACTION_SYSTEM_PROMPT
 
 

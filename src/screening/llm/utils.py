@@ -1,6 +1,4 @@
-"""LLM response helpers: token estimation, text extraction, and JSON parsing."""
-
-import json
+"""LLM response helpers: token estimation and text extraction."""
 
 from anthropic.types import MessageParam
 
@@ -47,24 +45,3 @@ def extract_text(response):
         for block in response.content
         if getattr(block, "type", None) == "text"
     )
-
-
-def parse_json_object(text: str) -> dict:
-    """Parse a JSON object from model output, stripping code fences.
-
-    Removes a surrounding Markdown code fence when present before parsing.
-
-    Args:
-        text (str): Raw model output expected to contain a JSON object.
-
-    Returns:
-        dict: The parsed JSON object.
-
-    Raises:
-        json.JSONDecodeError: If the cleaned text is not valid JSON.
-    """
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(lines[1:-1]).strip()
-    return json.loads(text)

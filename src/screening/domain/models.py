@@ -64,43 +64,15 @@ class DeliveryExperience(BaseModel):
 
     Attributes:
         years (float | None): Number of years of delivery experience, or None
-            when unknown. Normalized to 0 for explicit "no experience" answers.
+            when unknown. Uses 0 for explicit "no experience" answers.
         platform (str | None): Delivery platform the candidate worked with, or
             None when unknown.
     """
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     years: float | None = None
     platform: str | None = None
-
-    @field_validator("years", mode="before")
-    @classmethod
-    def normalize_years(cls, value):
-        """Normalize raw years input into a float or None.
-
-        Args:
-            value: Raw years value, which may be a number, an empty value, or
-                a free-text "no experience" phrase in English or Spanish.
-
-        Returns:
-            The original value, None for empty input, or 0 when the text
-            indicates the candidate has no experience.
-        """
-        if value in (None, ""):
-            return None
-        if isinstance(value, str) and value.strip().lower() in {
-            "no",
-            "nope",
-            "nah",
-            "none",
-            "ninguna",
-            "ninguno",
-            "sin experiencia",
-            "no experience",
-        }:
-            return 0
-        return value
 
     @field_validator("platform", mode="before")
     @classmethod
@@ -212,63 +184,6 @@ class CandidateProfile(BaseModel):
         value = str(value).strip()
         return value or None
 
-    @field_validator("drivers_license", mode="before")
-    @classmethod
-    def normalize_drivers_license(cls, value):
-        """Map a free-text license answer to a canonical license status.
-
-        Recognizes English and Spanish phrasings as well as boolean input.
-
-        Args:
-            value: Raw driver-license answer.
-
-        Returns:
-            One of "Yes", "No", "Pending", "Unknown", or the original value
-            when no mapping applies, or None when missing.
-        """
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return "Yes" if value else "No"
-
-        normalized = str(value).strip().lower()
-        if normalized in {"yes", "y", "true", "si", "sí"}:
-            return "Yes"
-        if normalized in {"no", "n", "nope", "nah", "false"}:
-            return "No"
-        if normalized in {"pending", "in progress", "taking it soon", "tramitando"}:
-            return "Pending"
-        if normalized in {"unknown", "unclear", "not clear"}:
-            return "Unknown"
-        if any(
-            phrase in normalized
-            for phrase in (
-                "taking it",
-                "next week",
-                "soon",
-                "in process",
-                "in progress",
-                "sacando",
-                "en tramite",
-                "en trámite",
-                "la semana que viene",
-            )
-        ):
-            return "Pending"
-        if any(
-            phrase in normalized
-            for phrase in (
-                "i have one",
-                "i have it",
-                "got one",
-                "tengo carnet",
-                "tengo licencia",
-                "tengo permiso",
-            )
-        ):
-            return "Yes"
-        return value
-
     @field_validator("city_zone")
     @classmethod
     def validate_canonical_city_zone(cls, value):
@@ -288,69 +203,6 @@ class CandidateProfile(BaseModel):
         if value not in load_service_area_names():
             raise ValueError("city_zone must be a canonical service area")
         return value
-
-    @field_validator("availability", mode="before")
-    @classmethod
-    def normalize_availability(cls, value):
-        """Map a free-text availability answer to a canonical value.
-
-        Recognizes English and Spanish phrasings.
-
-        Args:
-            value: Raw availability answer.
-
-        Returns:
-            One of "Full-time", "Part-time", "Weekends", or the original value
-            when no mapping applies, or None when missing.
-        """
-        if value is None:
-            return None
-
-        normalized = str(value).strip().lower().replace("_", " ").replace("-", " ")
-        values = {
-            "full time": "Full-time",
-            "fulltime": "Full-time",
-            "tiempo completo": "Full-time",
-            "part time": "Part-time",
-            "parttime": "Part-time",
-            "medio tiempo": "Part-time",
-            "weekends": "Weekends",
-            "weekend": "Weekends",
-            "fines de semana": "Weekends",
-            "fin de semana": "Weekends",
-        }
-        return values.get(normalized, value)
-
-    @field_validator("preferred_schedule", mode="before")
-    @classmethod
-    def normalize_preferred_schedule(cls, value):
-        """Map a free-text schedule answer to a canonical value.
-
-        Recognizes English and Spanish phrasings.
-
-        Args:
-            value: Raw preferred-schedule answer.
-
-        Returns:
-            One of "Morning", "Afternoon", "Evening", "Flexible", or the
-            original value when no mapping applies, or None when missing.
-        """
-        if value is None:
-            return None
-
-        normalized = str(value).strip().lower()
-        values = {
-            "morning": "Morning",
-            "mañana": "Morning",
-            "manana": "Morning",
-            "afternoon": "Afternoon",
-            "tarde": "Afternoon",
-            "evening": "Evening",
-            "noche": "Evening",
-            "flexible": "Flexible",
-            "flex": "Flexible",
-        }
-        return values.get(normalized, value)
 
     @model_validator(mode="after")
     def refresh_status(self) -> Self:
