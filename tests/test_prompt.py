@@ -1,11 +1,10 @@
-"""Tests for the agent system prompt builder and language-detection helpers."""
+"""Tests for the agent system prompt builder."""
 
 from screening.domain.models import CandidateProfile, DeliveryExperience
 from screening.llm.prompts.agent import (
     OPENING_MESSAGE,
     SYSTEM_PROMPT,
     build_system_prompt,
-    detect_latest_user_language,
     get_next_field,
 )
 from screening.llm.prompts.extraction import EXTRACTION_SYSTEM_PROMPT
@@ -47,18 +46,20 @@ def test_chat_prompt_handles_code_switching():
     assert "answer in Spanish" in SYSTEM_PROMPT
 
 
-def test_prompt_instructs_english_reply_for_english_latest_message():
-    prompt = build_system_prompt(
-        CandidateProfile(full_name="Marco"),
-        latest_user_message="my name is marco",
-    )
+def test_chat_prompt_keeps_general_language_instruction():
+    prompt = build_system_prompt(CandidateProfile(full_name="Marco"))
 
-    assert '"latest_user_language": "English"' in prompt
-    assert "Reply in English for the next assistant message" in prompt
+    assert "reply in the language the candidate is currently writing in" in prompt
+    assert "If they write in English, answer in English" in prompt
+    assert "If they code-switch between Spanish and English" in prompt
+    assert "answer in Spanish" in prompt
 
 
-def test_latest_user_language_detects_code_switching():
-    assert detect_latest_user_language("Sí, I can start next week") == "Mixed"
+def test_prompt_context_omits_heuristic_language_fields():
+    prompt = build_system_prompt(CandidateProfile(full_name="Marco"))
+
+    assert "latest_user" + "_language" not in prompt
+    assert "next_reply" + "_language_instruction" not in prompt
 
 
 def test_missing_fields_drive_next_question_goal():
@@ -87,7 +88,7 @@ def test_single_name_drives_surname_follow_up():
 
     assert get_next_field(profile) == "full_name"
 
-    prompt = build_system_prompt(profile, latest_user_message="my name is marco")
+    prompt = build_system_prompt(profile)
 
     assert '"next_field_to_collect": "full_name"' in prompt
     assert "ask for their surname or last name" in prompt

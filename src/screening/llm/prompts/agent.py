@@ -1,7 +1,6 @@
 """System prompt builder for Lucia, the bilingual screening chat agent."""
 
 import json
-import re
 
 
 SYSTEM_PROMPT = """\
@@ -58,18 +57,15 @@ CLARIFICATION_FIELD_LABELS = {
 }
 
 
-def build_system_prompt(profile, latest_user_message: str | None = None) -> str:
+def build_system_prompt(profile) -> str:
     """Assemble Lucia's full system prompt for the next assistant turn.
 
     Combines the static persona prompt, the screening-flow rules, and a JSON
-    snapshot of the current profile, next field to collect, and language
-    instructions.
+    snapshot of the current profile and next field to collect.
 
     Args:
         profile (CandidateProfile): The current candidate profile, used as the
             source of truth for what to ask next.
-        latest_user_message (str | None): The candidate's most recent message,
-            used to detect the reply language.
 
     Returns:
         str: The complete system prompt string.
@@ -79,10 +75,6 @@ def build_system_prompt(profile, latest_user_message: str | None = None) -> str:
         "profile": profile.model_dump(mode="json"),
         "next_field_to_collect": next_field,
         "next_question_goal": format_field_goal(next_field),
-        "latest_user_language": detect_latest_user_language(latest_user_message),
-        "next_reply_language_instruction": format_reply_language_instruction(
-            latest_user_message
-        ),
     }
 
     return "\n\n".join(
@@ -92,7 +84,6 @@ def build_system_prompt(profile, latest_user_message: str | None = None) -> str:
 Screening flow:
 - Use the current candidate profile below as the source of truth.
 - Ask exactly one question per reply.
-- Follow next_reply_language_instruction for the next assistant message.
 - First clarify any clarification_fields, then collect missing_fields in order.
 - If next_field_to_collect is full_name and the profile already has only one name, ask for their surname or last name.
 - Service areas are internal. Never list, suggest, confirm, or deny available service areas.
@@ -148,93 +139,3 @@ def format_field_goal(field: str | None) -> str | None:
     if field is None:
         return None
     return CLARIFICATION_FIELD_LABELS.get(field) or REQUIRED_FIELD_LABELS.get(field)
-
-
-def detect_latest_user_language(message: str | None) -> str:
-    """Heuristically detect the language of the candidate's latest message.
-
-    Scores the message against English and Spanish marker words and Spanish
-    orthography.
-
-    Args:
-        message (str | None): The candidate's latest message text.
-
-    Returns:
-        str: One of "English", "Spanish", "Mixed", or "Unknown".
-    """
-    if not message:
-        return "Unknown"
-
-    normalized = message.lower()
-    words = set(re.findall(r"[a-záéíóúüñ]+", normalized))
-    english_markers = {
-        "can",
-        "do",
-        "english",
-        "have",
-        "i",
-        "is",
-        "like",
-        "my",
-        "name",
-        "prefer",
-        "ready",
-        "there",
-        "work",
-        "yes",
-    }
-    spanish_markers = {
-        "ciudad",
-        "conducir",
-        "es",
-        "espanol",
-        "españa",
-        "gracias",
-        "hola",
-        "licencia",
-        "manejar",
-        "mexico",
-        "méxico",
-        "nombre",
-        "prefiero",
-        "si",
-        "sí",
-        "trabajar",
-        "zona",
-    }
-
-    english_score = len(words & english_markers)
-    spanish_score = len(words & spanish_markers)
-    if re.search(r"[¿¡áéíóúüñ]", normalized):
-        spanish_score += 1
-
-    if english_score and spanish_score:
-        return "Mixed"
-    if english_score > spanish_score:
-        return "English"
-    if spanish_score > english_score:
-        return "Spanish"
-    return "Unknown"
-
-
-def format_reply_language_instruction(message: str | None) -> str:
-    """Build the reply-language instruction for the next assistant message.
-
-    Args:
-        message (str | None): The candidate's latest message text.
-
-    Returns:
-        str: An instruction telling the agent which language to reply in, based
-            on the detected language of the message.
-    """
-    language = detect_latest_user_language(message)
-    if language == "English":
-        return "Reply in English for the next assistant message."
-    if language == "Spanish":
-        return "Reply in Spanish for the next assistant message."
-    if language == "Mixed":
-        return (
-            "The latest user message mixes English and Spanish. Reply in the "
-            "dominant language of that message."
-        )
-    return "Default to Spanish unless the candidate clearly asks for English."

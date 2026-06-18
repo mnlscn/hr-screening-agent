@@ -209,10 +209,7 @@ class ChatAgent:
             with self.client.messages.stream(
                 model=MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
-                system=build_system_prompt(
-                    self.profile,
-                    latest_user_message=self._latest_user_message(),
-                ),
+                system=build_system_prompt(self.profile),
                 messages=api_messages,
             ) as stream:
                 for text in stream.text_stream:
@@ -313,19 +310,6 @@ class ChatAgent:
                 duration_ms=_duration_ms(started_at),
                 **profile_state_metadata(self.profile),
             ).info("Profile extraction completed")
-
-    def _latest_user_message(self) -> str | None:
-        """Return the text of the most recent user message.
-
-        Returns:
-            str | None: The latest user message text, or None when there is no
-                user message or its content is not plain text.
-        """
-        for message in reversed(self.messages):
-            if message["role"] == "user":
-                content = message["content"]
-                return content if isinstance(content, str) else None
-        return None
 
     def _prune_memory(self) -> tuple[bool, bool]:
         """Drop oldest messages until the transcript fits the token budget.
