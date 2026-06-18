@@ -1,18 +1,15 @@
 import json
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import cast
 
 from anthropic import Anthropic
 from anthropic.types import MessageParam
 
 from screening.config import SUMMARY_MAX_TOKENS, SUMMARY_MODEL
 from screening.extraction import parse_json_object
-from screening.models import CandidateProfile
+from screening.models import VALID_BOT_LABELS, BotLabel, CandidateProfile
 from screening.utils import extract_text
 
-
-BotLabel = Literal["eligible", "not_eligible", "needs_review"]
-VALID_BOT_LABELS = {"eligible", "not_eligible", "needs_review"}
 
 SUMMARY_SYSTEM_PROMPT = """\
 You create concise HR screening summaries for delivery-driver candidates.

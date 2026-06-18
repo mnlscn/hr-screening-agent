@@ -1,4 +1,4 @@
-from typing import Literal, Self
+from typing import Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -10,6 +10,17 @@ CityZoneStatus = Literal["Matched", "Needs clarification", "Unsupported"]
 Availability = Literal["Full-time", "Part-time", "Weekends"]
 PreferredSchedule = Literal["Morning", "Afternoon", "Evening", "Flexible"]
 ConversationLanguage = Literal["English", "Spanish", "Mixed"]
+
+BotLabel = Literal["eligible", "not_eligible", "needs_review"]
+CandidateStatus = Literal["active", "completed", "disqualified"]
+
+VALID_BOT_LABELS: frozenset[str] = frozenset(get_args(BotLabel))
+
+ACTIVE_STATUS: CandidateStatus = "active"
+COMPLETED_STATUS: CandidateStatus = "completed"
+DISQUALIFIED_STATUS: CandidateStatus = "disqualified"
+VALID_STATUSES: frozenset[str] = frozenset(get_args(CandidateStatus))
+FINAL_STATUSES: frozenset[str] = frozenset({COMPLETED_STATUS, DISQUALIFIED_STATUS})
 
 REQUIRED_FIELDS = (
     "full_name",

@@ -1,12 +1,22 @@
-from pathlib import Path
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from anthropic.types import MessageParam
 from streamlit.testing.v1 import AppTest
 
-import screening.ui as ui
+import screening.ui.analytics as ui_analytics
+import screening.ui.analytics_logic as analytics_logic
+import screening.ui.app as ui_app
+import screening.ui.chat as ui_chat
+import screening.ui.constants as ui_constants
+import screening.ui.dashboard as ui_dashboard
+import screening.ui.dashboard_logic as dashboard_logic
+import screening.ui.formatting as ui_formatting
+import screening.ui.sidebar as ui_sidebar
+import screening.ui.state as ui_state
 from screening.agent import AgentStream
+from screening.config import ANTHROPIC_API_KEY_ENV
 from screening.models import CandidateProfile, DeliveryExperience, DriverLicense
 from screening.session import FinalizedCandidateSession
 from screening.storage import StoredCandidate
@@ -47,7 +57,7 @@ def test_profile_rows_format_extracted_fields():
         start_date="next Monday",
     )
 
-    rows = dict(ui._profile_rows(profile))
+    rows = dict(ui_formatting.profile_rows(profile))
 
     assert rows["Full name"] == "Maria Garcia"
     assert rows["Experience"] == "2 years, Glovo"
@@ -58,11 +68,15 @@ def test_render_app_uses_injected_agent_without_anthropic(monkeypatch):
     agent = FakeUiAgent()
     candidate = _stored_candidate(agent)
 
-    monkeypatch.setenv(ui.ANTHROPIC_API_KEY_ENV, "test-key")
-    monkeypatch.setattr(ui, "start_candidate_session", lambda: agent)
+    monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
+    monkeypatch.setattr(ui_state, "start_candidate_session", lambda: agent)
     monkeypatch.setattr(
-        ui, "load_candidate", lambda candidate_id, *, db_path: candidate
+        ui_state,
+        "load_candidate",
+        lambda candidate_id, *, db_path: candidate,
     )
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
 
     app = AppTest.from_function(_run_ui_app)
     app.run()
@@ -77,13 +91,17 @@ def test_chat_submit_streams_and_saves_with_injected_agent(monkeypatch):
     candidate = _stored_candidate(agent)
     saved_messages: list[list[MessageParam]] = []
 
-    monkeypatch.setenv(ui.ANTHROPIC_API_KEY_ENV, "test-key")
-    monkeypatch.setattr(ui, "start_candidate_session", lambda: agent)
+    monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
+    monkeypatch.setattr(ui_state, "start_candidate_session", lambda: agent)
     monkeypatch.setattr(
-        ui, "load_candidate", lambda candidate_id, *, db_path: candidate
+        ui_state,
+        "load_candidate",
+        lambda candidate_id, *, db_path: candidate,
     )
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(
-        ui,
+        ui_chat,
         "save_current_session",
         lambda saved_agent: saved_messages.append(list(saved_agent.messages)),
     )
@@ -105,11 +123,15 @@ def test_finish_button_finalizes_with_injected_agent(monkeypatch):
     candidate = _stored_candidate(agent)
     finalized_candidate_ids: list[str] = []
 
-    monkeypatch.setenv(ui.ANTHROPIC_API_KEY_ENV, "test-key")
-    monkeypatch.setattr(ui, "start_candidate_session", lambda: agent)
+    monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
+    monkeypatch.setattr(ui_state, "start_candidate_session", lambda: agent)
     monkeypatch.setattr(
-        ui, "load_candidate", lambda candidate_id, *, db_path: candidate
+        ui_state,
+        "load_candidate",
+        lambda candidate_id, *, db_path: candidate,
     )
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
 
     def fake_finalize(saved_agent):
         finalized_candidate_ids.append(saved_agent.candidate_id)
@@ -119,7 +141,7 @@ def test_finish_button_finalizes_with_injected_agent(monkeypatch):
             summary_status="completed",
         )
 
-    monkeypatch.setattr(ui, "finalize_candidate_session", fake_finalize)
+    monkeypatch.setattr(ui_sidebar, "finalize_candidate_session", fake_finalize)
 
     app = AppTest.from_function(_run_ui_app)
     app.run()
@@ -148,11 +170,12 @@ def test_dashboard_renders_candidates_without_anthropic(monkeypatch):
         ),
     ]
 
-    monkeypatch.delenv(ui.ANTHROPIC_API_KEY_ENV, raising=False)
-    monkeypatch.setattr(ui, "load_dotenv", lambda: None)
-    monkeypatch.setattr(ui, "list_candidates", lambda *, db_path: candidates)
+    monkeypatch.delenv(ANTHROPIC_API_KEY_ENV, raising=False)
+    monkeypatch.setattr(ui_app, "load_dotenv", lambda: None)
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: candidates)
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: candidates)
     monkeypatch.setattr(
-        ui,
+        ui_state,
         "start_candidate_session",
         lambda: (_ for _ in ()).throw(AssertionError("chat should not start")),
     )
@@ -164,7 +187,7 @@ def test_dashboard_renders_candidates_without_anthropic(monkeypatch):
     expander_labels = [expander.label for expander in app.expander]
     assert any("Elena Eligible · Eligible" in label for label in expander_labels)
     assert any("Rafael Review · Needs review" in label for label in expander_labels)
-    assert any(ui.ANTHROPIC_API_KEY_ENV in alert.value for alert in app.error)
+    assert any(ANTHROPIC_API_KEY_ENV in alert.value for alert in app.error)
 
 
 def test_dashboard_groups_candidates_by_triage_with_needs_review_fallback():
@@ -174,7 +197,7 @@ def test_dashboard_groups_candidates_by_triage_with_needs_review_fallback():
         _stored_candidate(FakeUiAgent("review-1"), bot_label=None),
     ]
 
-    grouped = ui._group_candidates_by_triage(candidates)
+    grouped = dashboard_logic.group_candidates_by_triage(candidates)
 
     assert [candidate.id for candidate in grouped["eligible"]] == ["eligible-1"]
     assert [candidate.id for candidate in grouped["not_eligible"]] == ["not-eligible-1"]
@@ -198,9 +221,9 @@ def test_candidate_finality_comes_from_lifecycle_status_not_summary_status():
         summary_status=None,
     )
 
-    assert ui._is_finalized(completed_without_summary)
-    assert ui._is_finalized(disqualified_candidate)
-    assert not ui._is_finalized(active_with_summary)
+    assert ui_state.is_finalized(completed_without_summary)
+    assert ui_state.is_finalized(disqualified_candidate)
+    assert not ui_state.is_finalized(active_with_summary)
 
 
 def test_dashboard_filters_candidates_by_triage_city_and_search():
@@ -217,9 +240,9 @@ def test_dashboard_filters_candidates_by_triage_city_and_search():
         bot_label="needs_review",
     )
 
-    filtered = ui._filter_candidates(
+    filtered = dashboard_logic.filter_candidates(
         [madrid_candidate, barcelona_candidate],
-        ui.DashboardFilters(
+        dashboard_logic.DashboardFilters(
             triage="Eligible",
             status="active",
             city_zone="Madrid",
@@ -238,15 +261,18 @@ def test_dashboard_open_chat_resumes_candidate(monkeypatch):
     )
     resumed_candidate_ids: list[str] = []
 
-    monkeypatch.setenv(ui.ANTHROPIC_API_KEY_ENV, "test-key")
-    monkeypatch.setattr(ui, "list_candidates", lambda *, db_path: [candidate])
-    monkeypatch.setattr(ui, "start_candidate_session", lambda: FakeUiAgent("current"))
+    monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [candidate])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(
+        ui_state, "start_candidate_session", lambda: FakeUiAgent("current")
+    )
 
     def fake_resume(candidate_id: str):
         resumed_candidate_ids.append(candidate_id)
         return FakeUiAgent(candidate_id)
 
-    monkeypatch.setattr(ui, "resume_candidate_session", fake_resume)
+    monkeypatch.setattr(ui_state, "resume_candidate_session", fake_resume)
 
     app = AppTest.from_function(_run_ui_app)
     app.run()
@@ -258,7 +284,7 @@ def test_dashboard_open_chat_resumes_candidate(monkeypatch):
 
 
 def test_analytics_kpis_handle_empty_candidates_and_duration_stats():
-    assert ui._analytics_kpis([]) == ui.AnalyticsKpis(
+    assert analytics_logic.analytics_kpis([]) == analytics_logic.AnalyticsKpis(
         started=0,
         completed=0,
         completion_rate=0,
@@ -293,7 +319,7 @@ def test_analytics_kpis_handle_empty_candidates_and_duration_stats():
         ),
     ]
 
-    kpis = ui._analytics_kpis(candidates)
+    kpis = analytics_logic.analytics_kpis(candidates)
 
     assert kpis.started == 3
     assert kpis.completed == 2
@@ -324,9 +350,9 @@ def test_dropoff_stage_prioritizes_clarification_then_missing_fields():
         completed_at="2026-01-01T00:10:00+00:00",
     )
 
-    assert ui._dropoff_stage(clarification_candidate) == "drivers_license"
-    assert ui._dropoff_stage(missing_candidate) == "city_zone"
-    assert ui._dropoff_stage(completed_candidate) is None
+    assert analytics_logic.dropoff_stage(clarification_candidate) == "drivers_license"
+    assert analytics_logic.dropoff_stage(missing_candidate) == "city_zone"
+    assert analytics_logic.dropoff_stage(completed_candidate) is None
 
 
 def test_city_distribution_counts_known_and_unknown_cities():
@@ -344,13 +370,13 @@ def test_city_distribution_counts_known_and_unknown_cities():
         _stored_candidate(FakeUiAgent("unknown-city"), city_zone=None),
     ]
 
-    rows = ui._city_distribution_rows(candidates)
+    rows = analytics_logic.city_distribution_rows(candidates)
     rows_by_city = {str(row["city"]): row for row in rows}
 
     assert rows_by_city["Madrid"]["count"] == 2
     assert rows_by_city["Madrid"]["eligible_share"] == 0.5
-    assert rows_by_city["Madrid"]["lat"] == ui.CITY_COORDINATES["Madrid"][0]
-    assert rows_by_city["Madrid"]["size"] == ui.MAP_BUBBLE_SIZE_SCALE * 2
+    assert rows_by_city["Madrid"]["lat"] == ui_constants.CITY_COORDINATES["Madrid"][0]
+    assert rows_by_city["Madrid"]["size"] == ui_constants.MAP_BUBBLE_SIZE_SCALE * 2
     assert rows_by_city["Unknown"]["count"] == 1
     assert rows_by_city["Unknown"]["lat"] is None
 
@@ -362,7 +388,7 @@ def test_chart_rows_rank_largest_values_first():
         {"stage": "Full name", "candidates": 2},
     ]
 
-    ranked = ui._ranked_chart_rows(
+    ranked = analytics_logic.ranked_chart_rows(
         rows,
         value="candidates",
         category="stage",
@@ -376,9 +402,11 @@ def test_chart_rows_rank_largest_values_first():
 
 
 def test_funnel_rows_preserve_required_field_order():
-    rows = ui._funnel_completion_rows([_stored_candidate(FakeUiAgent("candidate-1"))])
+    rows = analytics_logic.funnel_completion_rows(
+        [_stored_candidate(FakeUiAgent("candidate-1"))]
+    )
 
-    assert [row["stage"] for row in rows] == ui._funnel_stage_order()
+    assert [row["stage"] for row in rows] == analytics_logic.funnel_stage_order()
 
 
 def test_city_summary_rows_rank_largest_cities_first():
@@ -387,7 +415,7 @@ def test_city_summary_rows_rank_largest_cities_first():
         {"city": "Madrid", "count": 3, "eligible_count": 2, "eligible_share": 2 / 3},
     ]
 
-    summary = ui._city_summary_rows(rows)
+    summary = analytics_logic.city_summary_rows(rows)
 
     assert [row["City"] for row in summary] == ["Madrid", "Barcelona"]
     assert summary[0]["Candidates"] == 3
@@ -415,7 +443,7 @@ def test_stale_active_candidates_ignore_recent_and_completed_candidates():
         ),
     ]
 
-    stale = ui._stale_active_candidates(
+    stale = analytics_logic.stale_active_candidates(
         candidates,
         now=datetime(2026, 1, 2, 12, 0, tzinfo=UTC),
     )
@@ -443,9 +471,10 @@ def test_analytics_tab_renders_with_injected_candidates_without_anthropic(monkey
         ),
     ]
 
-    monkeypatch.delenv(ui.ANTHROPIC_API_KEY_ENV, raising=False)
-    monkeypatch.setattr(ui, "load_dotenv", lambda: None)
-    monkeypatch.setattr(ui, "list_candidates", lambda *, db_path: candidates)
+    monkeypatch.delenv(ANTHROPIC_API_KEY_ENV, raising=False)
+    monkeypatch.setattr(ui_app, "load_dotenv", lambda: None)
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: candidates)
 
     app = AppTest.from_function(_run_ui_app)
     app.run()
@@ -498,6 +527,6 @@ def _stored_candidate(
 
 
 def _run_ui_app():
-    import screening.ui as ui_module
+    import screening.ui.app as ui_app
 
-    ui_module.render_app()
+    ui_app.render_app()

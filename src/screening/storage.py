@@ -9,18 +9,18 @@ from uuid import uuid4
 from anthropic.types import MessageParam
 
 from screening.config import SCREENING_DB_PATH
-from screening.models import CandidateProfile
+from screening.models import (
+    ACTIVE_STATUS,
+    FINAL_STATUSES,
+    VALID_BOT_LABELS,
+    VALID_STATUSES,
+    CandidateProfile,
+)
 
 
-ACTIVE_STATUS = "active"
-COMPLETED_STATUS = "completed"
-DISQUALIFIED_STATUS = "disqualified"
-VALID_STATUSES = {ACTIVE_STATUS, COMPLETED_STATUS, DISQUALIFIED_STATUS}
-FINAL_STATUSES = {COMPLETED_STATUS, DISQUALIFIED_STATUS}
 PENDING_SUMMARY_STATUS = "pending"
 COMPLETED_SUMMARY_STATUS = "completed"
 FAILED_SUMMARY_STATUS = "failed"
-VALID_BOT_LABELS = {"eligible", "not_eligible", "needs_review"}
 
 
 @dataclass(frozen=True)
@@ -94,6 +94,7 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 clarification_fields TEXT NOT NULL,
                 disqualification_reasons TEXT NOT NULL,
                 profile_json TEXT NOT NULL,
+                -- mirrors VALID_STATUSES in screening.models (DDL can't import Python)
                 status TEXT NOT NULL CHECK (
                     status IN ('active', 'completed', 'disqualified')
                 ),
@@ -289,6 +290,7 @@ def save_candidate_profile(
                 clarification_fields = :clarification_fields,
                 disqualification_reasons = :disqualification_reasons,
                 profile_json = :profile_json,
+                -- 'completed'/'disqualified' mirror FINAL_STATUSES in screening.models
                 status = CASE
                     WHEN status IN ('completed', 'disqualified')
                          AND :status = 'active' THEN status
