@@ -9,7 +9,7 @@ from uuid import uuid4
 from anthropic.types import MessageParam
 
 from screening.config import SCREENING_DB_PATH
-from screening.models import (
+from screening.domain.models import (
     ACTIVE_STATUS,
     FINAL_STATUSES,
     VALID_BOT_LABELS,
@@ -96,7 +96,7 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 clarification_fields TEXT NOT NULL,
                 disqualification_reasons TEXT NOT NULL,
                 profile_json TEXT NOT NULL,
-                -- mirrors VALID_STATUSES in screening.models (DDL can't import Python)
+                -- mirrors VALID_STATUSES in screening.domain.models (DDL can't import Python)
                 status TEXT NOT NULL CHECK (
                     status IN ('active', 'completed', 'disqualified')
                 ),
@@ -292,7 +292,7 @@ def save_candidate_profile(
                 clarification_fields = :clarification_fields,
                 disqualification_reasons = :disqualification_reasons,
                 profile_json = :profile_json,
-                -- 'completed'/'disqualified' mirror FINAL_STATUSES in screening.models
+                -- 'completed'/'disqualified' mirror FINAL_STATUSES in screening.domain.models
                 status = CASE
                     WHEN status IN ('completed', 'disqualified')
                          AND :status = 'active' THEN status

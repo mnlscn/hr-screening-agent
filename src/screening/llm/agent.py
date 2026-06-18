@@ -11,10 +11,10 @@ from screening.config import (
     MODEL,
     SCREENING_DB_PATH,
 )
-from screening.extraction import CandidateExtractor
-from screening.models import CandidateProfile
-from screening.prompt import OPENING_MESSAGE, build_system_prompt
-from screening.utils import count_tokens
+from screening.domain.models import CandidateProfile
+from screening.llm.extraction import CandidateExtractor
+from screening.llm.prompts.agent import OPENING_MESSAGE, build_system_prompt
+from screening.llm.utils import count_tokens
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,7 @@ class ChatAgent:
         api_key: str | None = None,
         db_path: str | Path = SCREENING_DB_PATH,
     ) -> "ChatAgent":
-        from screening.storage import load_agent_state
+        from screening.persistence.storage import load_agent_state
 
         state = load_agent_state(candidate_id, db_path=db_path)
         if state is None:

@@ -1,10 +1,10 @@
 import streamlit as st
 
-from screening.agent import ChatAgent
+from screening.llm.agent import ChatAgent
 from screening.config import ANTHROPIC_API_KEY_ENV
-from screening.models import CandidateProfile
-from screening.session import finalize_candidate_session
-from screening.storage import StoredCandidate
+from screening.domain.models import CandidateProfile
+from screening.application.session import finalize_candidate_session
+from screening.persistence.storage import StoredCandidate
 from screening.ui.formatting import format_list, format_value, format_timestamp
 from screening.ui.formatting import profile_rows
 from screening.ui.state import clear_candidate_session, is_finalized

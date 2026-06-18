@@ -1,9 +1,9 @@
 import streamlit as st
 from anthropic.types import MessageParam
 
-from screening.agent import ChatAgent
+from screening.llm.agent import ChatAgent
 from screening.config import ANTHROPIC_API_KEY_ENV
-from screening.session import save_current_session
+from screening.application.session import save_current_session
 from screening.ui.constants import CHAT_WINDOW_HEIGHT
 from screening.ui.formatting import message_text
 from screening.ui.state import get_or_create_agent, has_api_key, is_finalized

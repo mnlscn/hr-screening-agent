@@ -1,12 +1,12 @@
-from screening.models import CandidateProfile, DeliveryExperience
-from screening.prompt import (
-    EXTRACTION_SYSTEM_PROMPT,
+from screening.domain.models import CandidateProfile, DeliveryExperience
+from screening.llm.prompts.agent import (
     OPENING_MESSAGE,
     SYSTEM_PROMPT,
     build_system_prompt,
     detect_latest_user_language,
     get_next_field,
 )
+from screening.llm.prompts.extraction import EXTRACTION_SYSTEM_PROMPT
 
 
 def test_opening_message_matches_recruiter_outreach_flow():

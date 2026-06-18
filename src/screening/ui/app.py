@@ -1,7 +1,7 @@
 import streamlit as st
 from dotenv import load_dotenv
 
-from screening.agent import ChatAgent
+from screening.llm.agent import ChatAgent
 from screening.ui.analytics import render_analytics
 from screening.ui.chat import render_chat_view
 from screening.ui.dashboard import render_dashboard

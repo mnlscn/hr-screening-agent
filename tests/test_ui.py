@@ -15,11 +15,11 @@ import screening.ui.dashboard_logic as dashboard_logic
 import screening.ui.formatting as ui_formatting
 import screening.ui.sidebar as ui_sidebar
 import screening.ui.state as ui_state
-from screening.agent import AgentStream
+from screening.llm.agent import AgentStream
 from screening.config import ANTHROPIC_API_KEY_ENV
-from screening.models import CandidateProfile, DeliveryExperience, DriverLicense
-from screening.session import FinalizedCandidateSession
-from screening.storage import StoredCandidate
+from screening.domain.models import CandidateProfile, DeliveryExperience, DriverLicense
+from screening.application.session import FinalizedCandidateSession
+from screening.persistence.storage import StoredCandidate
 
 
 class FakeUiAgent:

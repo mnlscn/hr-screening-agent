@@ -1,4 +1,4 @@
-from screening.utils import load_service_area_names, load_service_areas
+from screening.domain.service_areas import load_service_area_names, load_service_areas
 
 
 def test_load_service_areas_returns_structured_records():

@@ -2,7 +2,7 @@ from typing import Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from screening.utils import load_service_area_names
+from screening.domain.service_areas import load_service_area_names
 
 
 DriverLicense = Literal["Yes", "No", "Pending", "Unknown"]

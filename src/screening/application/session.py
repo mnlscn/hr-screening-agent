@@ -2,10 +2,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from screening.agent import ChatAgent
+from screening.llm.agent import ChatAgent
 from screening.config import ANTHROPIC_API_KEY_ENV, SCREENING_DB_PATH, SUMMARY_MODEL
-from screening.models import ACTIVE_STATUS, COMPLETED_STATUS
-from screening.storage import (
+from screening.domain.models import ACTIVE_STATUS, COMPLETED_STATUS
+from screening.persistence.storage import (
     SavedCandidateSession,
     create_candidate,
     mark_candidate_summary_pending,
@@ -13,7 +13,7 @@ from screening.storage import (
     save_candidate_summary,
     save_candidate_summary_failure,
 )
-from screening.summary import CandidateSummarizer
+from screening.llm.summary import CandidateSummarizer
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 import streamlit as st
 
 from screening.config import SCREENING_DB_PATH
-from screening.storage import StoredCandidate, list_candidates
+from screening.persistence.storage import StoredCandidate, list_candidates
 from screening.ui.constants import FILTER_ALL, TRIAGE_LABELS, TRIAGE_TITLES
 from screening.ui.dashboard_logic import (
     DashboardFilters,

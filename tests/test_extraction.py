@@ -1,8 +1,8 @@
 import json
 from typing import Any, cast
 
-from screening.extraction import CandidateExtractor
-from screening.models import CandidateProfile
+from screening.llm.extraction import CandidateExtractor
+from screening.domain.models import CandidateProfile
 
 
 def test_extractor_output_shape_includes_conversation_language():

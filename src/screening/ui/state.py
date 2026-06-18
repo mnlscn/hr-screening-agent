@@ -3,15 +3,15 @@ from typing import cast
 
 import streamlit as st
 
-from screening.agent import ChatAgent
+from screening.llm.agent import ChatAgent
 from screening.config import ANTHROPIC_API_KEY_ENV, SCREENING_DB_PATH
-from screening.session import (
+from screening.application.session import (
     resume_candidate_session,
     save_current_session,
     start_candidate_session,
 )
-from screening.models import FINAL_STATUSES
-from screening.storage import StoredCandidate, load_candidate
+from screening.domain.models import FINAL_STATUSES
+from screening.persistence.storage import StoredCandidate, load_candidate
 from screening.ui.constants import AGENT_SESSION_KEY, CANDIDATE_ID_PARAM
 from screening.ui.formatting import format_value
 

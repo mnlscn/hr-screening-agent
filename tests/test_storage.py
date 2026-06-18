@@ -4,8 +4,8 @@ from uuid import UUID
 
 from anthropic.types import MessageParam
 
-from screening.models import CandidateProfile, DeliveryExperience
-from screening.storage import (
+from screening.domain.models import CandidateProfile, DeliveryExperience
+from screening.persistence.storage import (
     create_candidate,
     init_database,
     load_agent_state,

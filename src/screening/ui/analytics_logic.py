@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from statistics import mean, median
 
-from screening.models import REQUIRED_FIELDS
-from screening.storage import StoredCandidate
+from screening.domain.models import REQUIRED_FIELDS
+from screening.persistence.storage import StoredCandidate
 from screening.ui.constants import (
     ANALYTICS_OUTCOME_TITLES,
     CITY_COORDINATES,

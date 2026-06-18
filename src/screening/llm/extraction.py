@@ -4,9 +4,10 @@ from anthropic import Anthropic
 from anthropic.types import MessageParam
 
 from screening.config import EXTRACTION_MAX_TOKENS, MODEL
-from screening.models import CandidateProfile
-from screening.prompt import EXTRACTION_SYSTEM_PROMPT
-from screening.utils import extract_text, load_service_area_names
+from screening.domain.models import CandidateProfile
+from screening.domain.service_areas import load_service_area_names
+from screening.llm.prompts.extraction import EXTRACTION_SYSTEM_PROMPT
+from screening.llm.utils import extract_text, parse_json_object
 
 
 class CandidateExtractor:
@@ -62,11 +63,3 @@ class CandidateExtractor:
             },
             ensure_ascii=True,
         )
-
-
-def parse_json_object(text: str) -> dict:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(lines[1:-1]).strip()
-    return json.loads(text)

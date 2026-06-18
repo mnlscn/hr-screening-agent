@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import get_args
 
-from screening.models import BotLabel
+from screening.domain.models import BotLabel
 
 AGENT_SESSION_KEY = "screening_agent"
 CANDIDATE_ID_PARAM = "candidate_id"

@@ -3,7 +3,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from screening.models import CandidateProfile, DeliveryExperience
+from screening.domain.models import CandidateProfile, DeliveryExperience
 
 
 def unchecked(value: object) -> Any:

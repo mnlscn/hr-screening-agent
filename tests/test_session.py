@@ -3,24 +3,24 @@ from typing import Any, cast
 import pytest
 from anthropic.types import MessageParam
 
-import screening.agent as agent_module
-from screening.agent import ChatAgent
-from screening.models import CandidateProfile, DeliveryExperience
-from screening.prompt import OPENING_MESSAGE
-from screening.session import (
+import screening.llm.agent as agent_module
+from screening.llm.agent import ChatAgent
+from screening.domain.models import CandidateProfile, DeliveryExperience
+from screening.llm.prompts.agent import OPENING_MESSAGE
+from screening.application.session import (
     finalize_candidate_session,
     resume_candidate_session,
     save_current_session,
     start_candidate_session,
 )
-from screening.storage import (
+from screening.persistence.storage import (
     create_candidate,
     load_agent_state,
     load_candidate,
     load_candidate_messages,
     save_candidate_session,
 )
-from screening.summary import CandidateSummary
+from screening.llm.summary import CandidateSummary
 
 
 class FakeAgent:

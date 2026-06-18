@@ -4,10 +4,10 @@ from typing import cast
 import pytest
 from anthropic.types import MessageParam
 
-import screening.agent as agent_module
-from screening.models import CandidateProfile
-from screening.prompt import OPENING_MESSAGE
-from screening.storage import save_candidate_session
+import screening.llm.agent as agent_module
+from screening.domain.models import CandidateProfile
+from screening.llm.prompts.agent import OPENING_MESSAGE
+from screening.persistence.storage import save_candidate_session
 
 
 class FakeStream:

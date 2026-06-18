@@ -5,8 +5,8 @@ from typing import Any, cast
 import pytest
 from anthropic.types import MessageParam
 
-from screening.models import CandidateProfile, DeliveryExperience
-from screening.summary import (
+from screening.domain.models import CandidateProfile, DeliveryExperience
+from screening.llm.summary import (
     CandidateSummarizer,
     determine_bot_label,
 )

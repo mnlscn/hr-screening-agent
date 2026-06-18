@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 
 from anthropic.types import MessageParam
 
-from screening.models import CandidateProfile, DeliveryExperience
+from screening.domain.models import CandidateProfile, DeliveryExperience
 
 
 def format_experience(experience: DeliveryExperience | None) -> str:

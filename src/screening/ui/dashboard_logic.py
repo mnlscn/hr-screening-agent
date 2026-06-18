@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from screening.storage import StoredCandidate
+from screening.persistence.storage import StoredCandidate
 from screening.ui.constants import FILTER_ALL, TRIAGE_LABELS, TRIAGE_TITLES
 from screening.ui.formatting import (
     format_experience,

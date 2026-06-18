@@ -2,7 +2,7 @@ import altair as alt
 import streamlit as st
 
 from screening.config import SCREENING_DB_PATH
-from screening.storage import StoredCandidate, list_candidates
+from screening.persistence.storage import StoredCandidate, list_candidates
 from screening.ui.analytics_logic import (
     AnalyticsFilters,
     analytics_kpis,
