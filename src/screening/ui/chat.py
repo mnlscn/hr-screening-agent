@@ -1,3 +1,5 @@
+"""Streamlit rendering for the candidate chat tab."""
+
 import streamlit as st
 from anthropic.types import MessageParam
 

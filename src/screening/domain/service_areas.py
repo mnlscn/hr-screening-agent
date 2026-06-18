@@ -1,3 +1,5 @@
+"""Loader for the service-areas reference data bundled with the package."""
+
 import json
 from functools import lru_cache
 from importlib.resources import files

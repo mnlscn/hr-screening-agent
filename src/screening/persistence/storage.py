@@ -1,3 +1,5 @@
+"""SQLite-backed persistence for candidate profiles, transcripts, and summaries."""
+
 import json
 import sqlite3
 from dataclasses import dataclass

@@ -1,3 +1,5 @@
+"""System prompt for the structured profile extraction LLM call."""
+
 EXTRACTION_SYSTEM_PROMPT = """\
 You extract structured recruiting screening data from a delivery-driver chat.
 Return strict JSON only. Do not include markdown, comments, or explanations.

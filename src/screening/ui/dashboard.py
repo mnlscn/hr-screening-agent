@@ -1,3 +1,5 @@
+"""Streamlit rendering for the HR dashboard tab: metrics, filters, and candidate cards."""
+
 import streamlit as st
 
 from screening.config import SCREENING_DB_PATH

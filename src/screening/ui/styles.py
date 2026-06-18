@@ -1,3 +1,5 @@
+"""Custom CSS injected into the Streamlit app for layout and visual polish."""
+
 APP_STYLES = """
 <style>
     .stApp {

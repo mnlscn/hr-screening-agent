@@ -1,3 +1,5 @@
+"""Tests for CandidateProfile validation, normalization, and merge logic."""
+
 from typing import Any, cast
 
 import pytest

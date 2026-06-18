@@ -1,3 +1,5 @@
+"""Tests for CandidateSummarizer: bot-label logic, summary generation, and resolution."""
+
 import json
 from dataclasses import dataclass
 from typing import Any, cast

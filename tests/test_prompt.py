@@ -1,3 +1,5 @@
+"""Tests for the agent system prompt builder and language-detection helpers."""
+
 from screening.domain.models import CandidateProfile, DeliveryExperience
 from screening.llm.prompts.agent import (
     OPENING_MESSAGE,

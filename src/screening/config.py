@@ -1,3 +1,5 @@
+"""Runtime configuration constants: model names, token limits, and paths."""
+
 ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
 MODEL = "claude-haiku-4-5-20251001"
 SUMMARY_MODEL = "claude-sonnet-4-6"

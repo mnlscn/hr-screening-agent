@@ -1,3 +1,5 @@
+"""Tests for application session workflows: start, save, resume, and finalize."""
+
 from typing import Any, cast
 
 import pytest

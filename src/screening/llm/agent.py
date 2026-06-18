@@ -1,3 +1,5 @@
+"""ChatAgent: drives the screening conversation and extracts candidate profiles."""
+
 from dataclasses import dataclass
 from collections.abc import Iterator
 from pathlib import Path

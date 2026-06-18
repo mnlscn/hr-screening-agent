@@ -1,3 +1,5 @@
+"""Streamlit app entry point: assembles the chat, dashboard, and analytics tabs."""
+
 import streamlit as st
 from dotenv import load_dotenv
 

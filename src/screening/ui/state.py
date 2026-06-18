@@ -1,3 +1,5 @@
+"""Streamlit session-state management: agent lifecycle, URL params, and navigation."""
+
 import os
 from typing import cast
 

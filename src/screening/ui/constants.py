@@ -1,3 +1,5 @@
+"""UI constants: session keys, display labels, city coordinates, and thresholds."""
+
 from datetime import timedelta
 from typing import get_args
 

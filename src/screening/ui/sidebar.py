@@ -1,3 +1,5 @@
+"""Streamlit sidebar: session controls, candidate metadata, profile, and HR summary."""
+
 import streamlit as st
 
 from screening.llm.agent import ChatAgent

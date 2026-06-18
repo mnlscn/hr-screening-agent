@@ -1,3 +1,5 @@
+"""Tests for UI helpers: formatting, analytics logic, and dashboard logic."""
+
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast

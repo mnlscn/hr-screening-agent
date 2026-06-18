@@ -1,3 +1,5 @@
+"""Tests for CandidateExtractor: LLM response parsing and profile updates."""
+
 import json
 from typing import Any, cast
 

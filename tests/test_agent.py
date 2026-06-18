@@ -1,3 +1,5 @@
+"""Tests for ChatAgent: streaming, memory pruning, and profile extraction."""
+
 from typing import Any
 from typing import cast
 

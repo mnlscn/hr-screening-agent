@@ -1,3 +1,5 @@
+"""Tests for SQLite storage: CRUD operations, schema integrity, and edge cases."""
+
 import sqlite3
 from typing import cast
 from uuid import UUID

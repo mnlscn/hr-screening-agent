@@ -1,3 +1,5 @@
+"""System prompt for the HR summary and bot-label generation LLM call."""
+
 SUMMARY_SYSTEM_PROMPT = """\
 You create concise HR screening summaries for delivery-driver candidates.
 Return strict JSON only. Do not include comments or explanations outside JSON.

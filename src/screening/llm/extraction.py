@@ -1,3 +1,5 @@
+"""CandidateExtractor: parses screening transcripts into structured profile updates."""
+
 import json
 
 from anthropic import Anthropic

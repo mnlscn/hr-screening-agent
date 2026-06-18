@@ -1,3 +1,5 @@
+"""Pure logic for analytics: filtering, KPI computation, and chart data preparation."""
+
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from statistics import mean, median

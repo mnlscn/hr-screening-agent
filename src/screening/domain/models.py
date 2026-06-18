@@ -1,3 +1,5 @@
+"""Domain types and the CandidateProfile model with validation and merge logic."""
+
 from typing import Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator

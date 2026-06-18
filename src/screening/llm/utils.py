@@ -1,3 +1,5 @@
+"""LLM response helpers: token estimation, text extraction, and JSON parsing."""
+
 import json
 
 from anthropic.types import MessageParam

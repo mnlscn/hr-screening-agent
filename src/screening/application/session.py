@@ -1,3 +1,5 @@
+"""Candidate session lifecycle: start, save, resume, and finalize screenings."""
+
 import os
 from dataclasses import dataclass
 from pathlib import Path

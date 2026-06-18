@@ -1,3 +1,5 @@
+"""Display formatting helpers for values, timestamps, durations, and profiles."""
+
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
 

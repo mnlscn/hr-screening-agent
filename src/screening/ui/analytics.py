@@ -1,3 +1,5 @@
+"""Streamlit rendering for the analytics tab: KPIs, charts, and candidate maps."""
+
 import altair as alt
 import streamlit as st
 

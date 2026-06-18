@@ -1,3 +1,5 @@
+"""Pure logic for the HR dashboard: filtering, grouping, triage, and card data."""
+
 from dataclasses import dataclass
 
 from screening.persistence.storage import StoredCandidate

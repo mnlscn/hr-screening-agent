@@ -1,3 +1,5 @@
+"""Tests for service-area loading and canonical name resolution."""
+
 from screening.domain.service_areas import load_service_area_names, load_service_areas
 
 

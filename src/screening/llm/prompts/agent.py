@@ -1,3 +1,5 @@
+"""System prompt builder for Lucia, the bilingual screening chat agent."""
+
 import json
 import re
 
