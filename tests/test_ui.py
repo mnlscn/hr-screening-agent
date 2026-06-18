@@ -181,6 +181,28 @@ def test_dashboard_groups_candidates_by_triage_with_needs_review_fallback():
     assert [candidate.id for candidate in grouped["needs_review"]] == ["review-1"]
 
 
+def test_candidate_finality_comes_from_lifecycle_status_not_summary_status():
+    completed_without_summary = _stored_candidate(
+        FakeUiAgent("completed-1"),
+        status="completed",
+        summary_status=None,
+    )
+    active_with_summary = _stored_candidate(
+        FakeUiAgent("active-1"),
+        status="active",
+        summary_status="completed",
+    )
+    disqualified_candidate = _stored_candidate(
+        FakeUiAgent("disqualified-1"),
+        status="disqualified",
+        summary_status=None,
+    )
+
+    assert ui._is_finalized(completed_without_summary)
+    assert ui._is_finalized(disqualified_candidate)
+    assert not ui._is_finalized(active_with_summary)
+
+
 def test_dashboard_filters_candidates_by_triage_city_and_search():
     madrid_candidate = _stored_candidate(
         FakeUiAgent("madrid-1"),

@@ -6,8 +6,6 @@ from anthropic.types import MessageParam
 
 from screening.models import CandidateProfile, DeliveryExperience
 from screening.storage import (
-    append_candidate_message,
-    append_candidate_messages,
     create_candidate,
     init_database,
     load_agent_state,
@@ -139,8 +137,8 @@ def test_candidate_profile_round_trips_and_updates_queryable_columns(tmp_path):
 
     loaded = load_candidate(candidate_id, db_path=db_path)
     assert loaded is not None
-    assert loaded.status == "completed"
-    assert loaded.completed_at is not None
+    assert loaded.status == "active"
+    assert loaded.completed_at is None
     assert loaded.profile.model_dump(mode="json") == profile.model_dump(mode="json")
 
     with sqlite3.connect(db_path) as connection:
@@ -160,7 +158,38 @@ def test_candidate_profile_round_trips_and_updates_queryable_columns(tmp_path):
     assert row == ("Maria Garcia", "Madrid", 2.0, "Glovo", 1)
 
 
-def test_messages_preserve_order_when_replaced_and_appended(tmp_path):
+def test_complete_profile_only_finalizes_with_explicit_status(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+    candidate_id = create_candidate(db_path=db_path)
+    profile = CandidateProfile(
+        full_name="Maria Garcia",
+        drivers_license="Yes",
+        raw_city_zone="Madrid",
+        city_zone="Madrid",
+        city_zone_status="Matched",
+        availability="Full-time",
+        preferred_schedule="Morning",
+        prior_delivery_experience=DeliveryExperience(years=2, platform="Glovo"),
+        start_date="next Monday",
+    )
+
+    save_candidate_profile(candidate_id, profile, db_path=db_path, status="completed")
+
+    loaded = load_candidate(candidate_id, db_path=db_path)
+    assert loaded is not None
+    assert loaded.status == "completed"
+    assert loaded.completed_at is not None
+    completed_at = loaded.completed_at
+
+    save_candidate_profile(candidate_id, profile, db_path=db_path, status="active")
+
+    loaded = load_candidate(candidate_id, db_path=db_path)
+    assert loaded is not None
+    assert loaded.status == "completed"
+    assert loaded.completed_at == completed_at
+
+
+def test_messages_preserve_order_when_replaced(tmp_path):
     db_path = tmp_path / "screening.sqlite3"
     candidate_id = create_candidate(db_path=db_path)
     messages = [
@@ -174,22 +203,8 @@ def test_messages_preserve_order_when_replaced_and_appended(tmp_path):
 
     replacement = [cast(MessageParam, {"role": "user", "content": "Resume"})]
     replace_candidate_messages(candidate_id, replacement, db_path=db_path)
-    append_candidate_message(
-        candidate_id,
-        cast(MessageParam, {"role": "assistant", "content": "Seguimos"}),
-        db_path=db_path,
-    )
-    append_candidate_messages(
-        candidate_id,
-        [cast(MessageParam, {"role": "user", "content": "Vale"})],
-        db_path=db_path,
-    )
 
-    assert load_candidate_messages(candidate_id, db_path=db_path) == [
-        cast(MessageParam, {"role": "user", "content": "Resume"}),
-        cast(MessageParam, {"role": "assistant", "content": "Seguimos"}),
-        cast(MessageParam, {"role": "user", "content": "Vale"}),
-    ]
+    assert load_candidate_messages(candidate_id, db_path=db_path) == replacement
 
 
 def test_save_candidate_session_creates_loadable_agent_state(tmp_path):

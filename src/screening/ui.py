@@ -21,7 +21,12 @@ from screening.session import (
     save_current_session,
     start_candidate_session,
 )
-from screening.storage import StoredCandidate, list_candidates, load_candidate
+from screening.storage import (
+    FINAL_STATUSES,
+    StoredCandidate,
+    list_candidates,
+    load_candidate,
+)
 
 
 AGENT_SESSION_KEY = "screening_agent"
@@ -1264,7 +1269,7 @@ def _load_candidate(agent: ChatAgent) -> StoredCandidate | None:
 
 
 def _is_finalized(candidate: StoredCandidate | None) -> bool:
-    return candidate is not None and candidate.summary_status is not None
+    return candidate is not None and candidate.status in FINAL_STATUSES
 
 
 def _query_candidate_id() -> str | None:

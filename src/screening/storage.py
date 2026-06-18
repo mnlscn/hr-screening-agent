@@ -12,7 +12,6 @@ from screening.config import SCREENING_DB_PATH
 from screening.models import CandidateProfile
 
 
-SCHEMA_VERSION = 2
 ACTIVE_STATUS = "active"
 COMPLETED_STATUS = "completed"
 DISQUALIFIED_STATUS = "disqualified"
@@ -21,11 +20,6 @@ FINAL_STATUSES = {COMPLETED_STATUS, DISQUALIFIED_STATUS}
 PENDING_SUMMARY_STATUS = "pending"
 COMPLETED_SUMMARY_STATUS = "completed"
 FAILED_SUMMARY_STATUS = "failed"
-VALID_SUMMARY_STATUSES = {
-    PENDING_SUMMARY_STATUS,
-    COMPLETED_SUMMARY_STATUS,
-    FAILED_SUMMARY_STATUS,
-}
 VALID_BOT_LABELS = {"eligible", "not_eligible", "needs_review"}
 
 
@@ -153,7 +147,7 @@ def create_candidate(
     profile = profile or CandidateProfile()
     candidate_id = candidate_id or str(uuid4())
     now = _utc_now()
-    candidate_status = _normalize_status(status, profile)
+    candidate_status = _normalize_status(status)
     columns = {
         "id": candidate_id,
         **_profile_columns(profile),
@@ -262,7 +256,7 @@ def save_candidate_profile(
     status: str | None = None,
 ) -> None:
     database_path = init_database(db_path)
-    candidate_status = _normalize_status(status, profile)
+    candidate_status = _normalize_status(status)
     now = _utc_now()
     completed_at = now if candidate_status in FINAL_STATUSES else None
     columns = {
@@ -295,12 +289,13 @@ def save_candidate_profile(
                 clarification_fields = :clarification_fields,
                 disqualification_reasons = :disqualification_reasons,
                 profile_json = :profile_json,
-                status = :status,
+                status = CASE
+                    WHEN status IN ('completed', 'disqualified')
+                         AND :status = 'active' THEN status
+                    ELSE :status
+                END,
                 updated_at = :updated_at,
-                completed_at = CASE
-                    WHEN :completed_at IS NULL THEN NULL
-                    ELSE COALESCE(completed_at, :completed_at)
-                END
+                completed_at = COALESCE(completed_at, :completed_at)
             WHERE id = :candidate_id
             """,
             columns,
@@ -324,41 +319,6 @@ def replace_candidate_messages(
         )
         for position, message in enumerate(messages):
             _insert_message(connection, candidate_id, position, message)
-
-
-def append_candidate_message(
-    candidate_id: str,
-    message: MessageParam,
-    *,
-    db_path: str | Path = SCREENING_DB_PATH,
-) -> None:
-    append_candidate_messages(candidate_id, [message], db_path=db_path)
-
-
-def append_candidate_messages(
-    candidate_id: str,
-    messages: list[MessageParam],
-    *,
-    db_path: str | Path = SCREENING_DB_PATH,
-) -> None:
-    if not messages:
-        return
-
-    database_path = init_database(db_path)
-    with _connect(database_path) as connection:
-        _require_candidate(connection, candidate_id)
-        next_position = connection.execute(
-            """
-            SELECT COALESCE(MAX(position) + 1, 0)
-            FROM messages
-            WHERE candidate_id = ?
-            """,
-            (candidate_id,),
-        ).fetchone()[0]
-        for offset, message in enumerate(messages):
-            _insert_message(
-                connection, candidate_id, int(next_position) + offset, message
-            )
 
 
 def load_candidate_messages(
@@ -599,17 +559,11 @@ def _json_dumps(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
 
 
-def _normalize_status(status: str | None, profile: CandidateProfile) -> str:
-    candidate_status = status or _status_from_profile(profile)
+def _normalize_status(status: str | None) -> str:
+    candidate_status = status or ACTIVE_STATUS
     if candidate_status not in VALID_STATUSES:
         raise ValueError(f"invalid candidate status: {candidate_status}")
     return candidate_status
-
-
-def _status_from_profile(profile: CandidateProfile) -> str:
-    if profile.is_complete:
-        return COMPLETED_STATUS
-    return ACTIVE_STATUS
 
 
 def _profile_columns(profile: CandidateProfile) -> dict[str, object]:
