@@ -1,19 +1,19 @@
 {
-  "Spain": [
-    "Madrid",
-    "Barcelona",
-    "Valencia",
-    "Sevilla",
-    "Malaga",
-    "Zaragoza",
-    "Bilbao"
-  ],
-  "Mexico": [
-    "Ciudad de Mexico",
-    "Guadalajara",
-    "Monterrey",
-    "Puebla",
-    "Queretaro",
-    "Merida"
-  ]
+  "Spain": {
+    "Madrid": { "lat": 40.4168, "lon": -3.7038 },
+    "Barcelona": { "lat": 41.3874, "lon": 2.1686 },
+    "Valencia": { "lat": 39.4699, "lon": -0.3763 },
+    "Sevilla": { "lat": 37.3891, "lon": -5.9845 },
+    "Malaga": { "lat": 36.7213, "lon": -4.4214 },
+    "Zaragoza": { "lat": 41.6488, "lon": -0.8891 },
+    "Bilbao": { "lat": 43.263, "lon": -2.935 }
+  },
+  "Mexico": {
+    "Ciudad de Mexico": { "lat": 19.4326, "lon": -99.1332 },
+    "Guadalajara": { "lat": 20.6597, "lon": -103.3496 },
+    "Monterrey": { "lat": 25.6866, "lon": -100.3161 },
+    "Puebla": { "lat": 19.0414, "lon": -98.2063 },
+    "Queretaro": { "lat": 20.5888, "lon": -100.3899 },
+    "Merida": { "lat": 20.9674, "lon": -89.5926 }
+  }
 }

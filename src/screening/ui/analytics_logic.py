@@ -5,10 +5,10 @@ from datetime import UTC, date, datetime
 from statistics import mean, median
 
 from screening.domain.models import REQUIRED_FIELDS
+from screening.domain.service_areas import load_city_coordinates
 from screening.persistence.storage import StoredCandidate
 from screening.ui.constants import (
     ANALYTICS_OUTCOME_TITLES,
-    CITY_COORDINATES,
     FIELD_TITLES,
     FILTER_ALL,
     MAP_BUBBLE_SIZE_SCALE,
@@ -366,11 +366,12 @@ def city_distribution_rows(
             count and share, coordinates, bubble size, and color, plus an
             optional unmapped "Unknown" row.
     """
+    city_coordinates = load_city_coordinates()
     city_counts: dict[str, dict[str, int]] = {}
     unknown_count = 0
     for candidate in candidates:
         city = candidate.profile.city_zone
-        if city is None or city not in CITY_COORDINATES:
+        if city is None or city not in city_coordinates:
             unknown_count += 1
             continue
         if city not in city_counts:
@@ -383,7 +384,7 @@ def city_distribution_rows(
     for city, counts in sorted(city_counts.items()):
         count = counts["count"]
         eligible_share = counts["eligible"] / count if count else 0
-        lat, lon = CITY_COORDINATES[city]
+        lat, lon = city_coordinates[city]
         rows.append(
             {
                 "city": city,

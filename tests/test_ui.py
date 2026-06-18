@@ -20,6 +20,7 @@ import screening.ui.state as ui_state
 from screening.llm.agent import AgentStream
 from screening.config import ANTHROPIC_API_KEY_ENV
 from screening.domain.models import CandidateProfile, DeliveryExperience, DriverLicense
+from screening.domain.service_areas import load_city_coordinates
 from screening.application.session import FinalizedCandidateSession
 from screening.persistence.storage import StoredCandidate
 
@@ -377,7 +378,7 @@ def test_city_distribution_counts_known_and_unknown_cities():
 
     assert rows_by_city["Madrid"]["count"] == 2
     assert rows_by_city["Madrid"]["eligible_share"] == 0.5
-    assert rows_by_city["Madrid"]["lat"] == ui_constants.CITY_COORDINATES["Madrid"][0]
+    assert rows_by_city["Madrid"]["lat"] == load_city_coordinates()["Madrid"][0]
     assert rows_by_city["Madrid"]["size"] == ui_constants.MAP_BUBBLE_SIZE_SCALE * 2
     assert rows_by_city["Unknown"]["count"] == 1
     assert rows_by_city["Unknown"]["lat"] is None
