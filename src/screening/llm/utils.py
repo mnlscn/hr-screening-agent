@@ -8,9 +8,17 @@ from anthropic.types import MessageParam
 def count_tokens(messages: list[MessageParam]) -> int:
     """Approximate the token count of a message list.
 
-    Uses a rough characters-per-token heuristic so memory pruning works
-    without a tokenizer dependency. Non-string content counts as a single
-    token.
+    Uses a rough characters-per-token heuristic so the memory-pruning backstop
+    works without a tokenizer dependency. This is intentionally an estimate:
+    pruning only fires on pathological input (see MAX_INPUT_TOKENS), so the
+    budget never sits near a hard limit where precision would matter, and the
+    estimate stays cheap and local (no per-turn network call). Non-string
+    content counts as a single token.
+
+    For an exact, model-specific count (e.g. cost reporting or a real ceiling),
+    use the Anthropic API: ``client.messages.count_tokens(model=..., ...)``.
+    Do not reach for ``tiktoken`` — it is OpenAI's tokenizer and miscounts
+    Claude tokens, more so on the Spanish text this agent handles.
 
     Args:
         messages (list[MessageParam]): Conversation messages to measure.

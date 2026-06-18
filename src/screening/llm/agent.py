@@ -255,8 +255,10 @@ class ChatAgent:
     def _prune_memory(self) -> tuple[bool, bool]:
         """Drop oldest messages until the transcript fits the token budget.
 
-        Removes messages from the front while the estimated token count exceeds
-        ``MAX_INPUT_TOKENS``, stopping when only one message remains.
+        A rare backstop, not routine: ``MAX_INPUT_TOKENS`` is set well above any
+        normal screening transcript, so this only trims pathologically large
+        input. Removes messages from the front while the estimated token count
+        exceeds ``MAX_INPUT_TOKENS``, stopping when only one message remains.
 
         Returns:
             tuple[bool, bool]: A pair ``(memory_truncated, input_too_large)``
