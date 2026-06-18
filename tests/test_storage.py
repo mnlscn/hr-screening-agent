@@ -13,6 +13,7 @@ from screening.storage import (
     load_agent_state,
     load_candidate,
     load_candidate_messages,
+    list_candidates,
     mark_candidate_summary_pending,
     replace_candidate_messages,
     save_candidate_profile,
@@ -60,6 +61,61 @@ def test_create_candidate_generates_id_and_empty_profile(tmp_path):
     assert loaded.profile.model_dump(mode="json") == CandidateProfile().model_dump(
         mode="json"
     )
+
+
+def test_list_candidates_returns_empty_list_for_empty_database(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+
+    assert list_candidates(db_path=db_path) == []
+
+
+def test_list_candidates_returns_newest_candidates_with_summary_fields(tmp_path):
+    db_path = tmp_path / "screening.sqlite3"
+    older_id = create_candidate(
+        CandidateProfile(full_name="Older Candidate"),
+        db_path=db_path,
+    )
+    newer_id = create_candidate(
+        CandidateProfile(
+            full_name="Newer Candidate",
+            drivers_license="Yes",
+            raw_city_zone="Madrid",
+            city_zone="Madrid",
+            city_zone_status="Matched",
+            availability="Full-time",
+            preferred_schedule="Morning",
+            prior_delivery_experience=DeliveryExperience(years=1, platform="Glovo"),
+            start_date="tomorrow",
+        ),
+        db_path=db_path,
+    )
+    save_candidate_summary(
+        newer_id,
+        db_path=db_path,
+        hr_summary="Ready for HR review.",
+        bot_label="eligible",
+        model="claude-sonnet-4-6",
+    )
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE candidates SET updated_at = ? WHERE id = ?",
+            ("2026-01-01T00:00:00+00:00", older_id),
+        )
+        connection.execute(
+            "UPDATE candidates SET updated_at = ? WHERE id = ?",
+            ("2026-01-02T00:00:00+00:00", newer_id),
+        )
+
+    candidates = list_candidates(db_path=db_path)
+
+    assert [candidate.id for candidate in candidates] == [newer_id, older_id]
+    assert candidates[0].profile.full_name == "Newer Candidate"
+    assert candidates[0].profile.city_zone == "Madrid"
+    assert candidates[0].hr_summary == "Ready for HR review."
+    assert candidates[0].bot_label == "eligible"
+    assert candidates[0].summary_status == "completed"
+    assert candidates[0].updated_at == "2026-01-02T00:00:00+00:00"
 
 
 def test_candidate_profile_round_trips_and_updates_queryable_columns(tmp_path):

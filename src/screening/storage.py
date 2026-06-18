@@ -204,6 +204,40 @@ def load_candidate(
     if row is None:
         return None
 
+    return _stored_candidate_from_row(row)
+
+
+def list_candidates(
+    *,
+    db_path: str | Path = SCREENING_DB_PATH,
+) -> list[StoredCandidate]:
+    database_path = init_database(db_path)
+    with _connect(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT id,
+                   profile_json,
+                   status,
+                   started_at,
+                   updated_at,
+                   completed_at,
+                   hr_summary,
+                   bot_label,
+                   summary_status,
+                   summary_model,
+                   summary_error,
+                   summary_generated_at
+            FROM candidates
+            ORDER BY updated_at DESC,
+                     started_at DESC,
+                     id ASC
+            """
+        ).fetchall()
+
+    return [_stored_candidate_from_row(row) for row in rows]
+
+
+def _stored_candidate_from_row(row: sqlite3.Row) -> StoredCandidate:
     return StoredCandidate(
         id=str(row["id"]),
         profile=CandidateProfile.model_validate(json.loads(row["profile_json"])),

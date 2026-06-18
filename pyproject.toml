@@ -11,10 +11,8 @@ dependencies = [
     "anthropic>=0.109.2",
     "load-dotenv>=0.1.0",
     "pydantic>=2.13.4",
+    "streamlit>=1.58.0",
 ]
-
-[project.scripts]
-screening = "screening.main:main"
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
