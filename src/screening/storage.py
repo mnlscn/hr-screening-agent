@@ -62,18 +62,20 @@ class SavedCandidateSession:
     db_path: Path
 
 
+_initialized_paths: set[Path] = set()
+
+
 def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
     database_path = Path(db_path)
+    cache_key = database_path.resolve()
+    if cache_key in _initialized_paths:
+        return database_path
+
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     with _connect(database_path) as connection:
         connection.executescript(
             """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL
-            );
-
             CREATE TABLE IF NOT EXISTS candidates (
                 id TEXT PRIMARY KEY,
                 full_name TEXT,
@@ -132,8 +134,8 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 ON messages(candidate_id, position);
             """
         )
-        _migrate_database(connection)
 
+    _initialized_paths.add(cache_key)
     return database_path
 
 
@@ -505,52 +507,6 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
-
-
-def _migrate_database(connection: sqlite3.Connection) -> None:
-    applied_versions = {
-        int(row["version"])
-        for row in connection.execute("SELECT version FROM schema_migrations")
-    }
-
-    if 1 not in applied_versions:
-        _record_schema_migration(connection, 1)
-
-    if 2 not in applied_versions:
-        _migrate_to_v2(connection)
-        _record_schema_migration(connection, 2)
-
-
-def _record_schema_migration(
-    connection: sqlite3.Connection,
-    version: int,
-) -> None:
-    connection.execute(
-        """
-        INSERT OR IGNORE INTO schema_migrations (version, applied_at)
-        VALUES (?, ?)
-        """,
-        (version, _utc_now()),
-    )
-
-
-def _migrate_to_v2(connection: sqlite3.Connection) -> None:
-    existing_columns = {
-        str(row["name"]) for row in connection.execute("PRAGMA table_info(candidates)")
-    }
-    summary_columns = {
-        "hr_summary": "TEXT",
-        "bot_label": "TEXT",
-        "summary_status": "TEXT",
-        "summary_model": "TEXT",
-        "summary_error": "TEXT",
-        "summary_generated_at": "TEXT",
-    }
-    for column_name, column_type in summary_columns.items():
-        if column_name not in existing_columns:
-            connection.execute(
-                f"ALTER TABLE candidates ADD COLUMN {column_name} {column_type}"
-            )
 
 
 def _utc_now() -> str:

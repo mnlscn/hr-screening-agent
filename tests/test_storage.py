@@ -34,12 +34,8 @@ def test_init_database_is_idempotent(tmp_path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-        migrations = connection.execute(
-            "SELECT version FROM schema_migrations"
-        ).fetchall()
 
-    assert {"candidates", "messages", "schema_migrations"}.issubset(tables)
-    assert migrations == [(1,), (2,)]
+    assert {"candidates", "messages"}.issubset(tables)
 
 
 def test_create_candidate_generates_id_and_empty_profile(tmp_path):
@@ -288,77 +284,3 @@ def test_disqualified_profile_does_not_mark_candidate_disqualified(tmp_path):
     assert loaded is not None
     assert loaded.profile.is_disqualified
     assert loaded.status == "active"
-
-
-def test_version_one_database_migrates_summary_columns(tmp_path):
-    db_path = tmp_path / "screening.sqlite3"
-    with sqlite3.connect(db_path) as connection:
-        connection.executescript(
-            """
-            CREATE TABLE schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL
-            );
-            INSERT INTO schema_migrations (version, applied_at)
-            VALUES (1, '2026-01-01T00:00:00+00:00');
-
-            CREATE TABLE candidates (
-                id TEXT PRIMARY KEY,
-                full_name TEXT,
-                raw_drivers_license TEXT,
-                drivers_license TEXT,
-                raw_city_zone TEXT,
-                city_zone TEXT,
-                city_zone_status TEXT,
-                conversation_language TEXT,
-                availability TEXT,
-                preferred_schedule TEXT,
-                delivery_experience_years REAL,
-                delivery_experience_platform TEXT,
-                start_date TEXT,
-                is_complete INTEGER NOT NULL,
-                is_disqualified INTEGER NOT NULL,
-                missing_fields TEXT NOT NULL,
-                clarification_fields TEXT NOT NULL,
-                disqualification_reasons TEXT NOT NULL,
-                profile_json TEXT NOT NULL,
-                status TEXT NOT NULL CHECK (
-                    status IN ('active', 'completed', 'disqualified')
-                ),
-                started_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                completed_at TEXT
-            );
-
-            CREATE TABLE messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                candidate_id TEXT NOT NULL
-                    REFERENCES candidates(id) ON DELETE CASCADE,
-                position INTEGER NOT NULL,
-                role TEXT NOT NULL CHECK (role IN ('assistant', 'user')),
-                content_text TEXT NOT NULL,
-                message_json TEXT NOT NULL,
-                UNIQUE (candidate_id, position)
-            );
-            """
-        )
-
-    init_database(db_path)
-
-    with sqlite3.connect(db_path) as connection:
-        columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(candidates)")
-        }
-        migrations = connection.execute(
-            "SELECT version FROM schema_migrations ORDER BY version"
-        ).fetchall()
-
-    assert {
-        "hr_summary",
-        "bot_label",
-        "summary_status",
-        "summary_model",
-        "summary_error",
-        "summary_generated_at",
-    }.issubset(columns)
-    assert migrations == [(1,), (2,)]
