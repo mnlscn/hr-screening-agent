@@ -54,6 +54,18 @@ uv run ty check        # type checking
 
 CI runs lint, format, type-check, and tests on every push/PR ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
+**Manual extraction eval:**
+
+```bash
+uv run python -m screening.evals.run_extraction
+```
+
+This runs synthetic golden transcripts through the live `CandidateExtractor` and prints
+per-field accuracy, per-bucket accuracy, and confusion matrices. It loads `.env`, requires
+`ANTHROPIC_API_KEY`, spends real tokens, and is intentionally not part of CI. Use
+`--case-id city-alias-cdmx`, `--bucket city`, `--samples 3`, or `--out results.json` for
+debug runs.
+
 ---
 
 ## Architecture
@@ -147,7 +159,7 @@ With more time, in rough priority order:
   log request IDs for incident tracing.
 - **Privacy & access:** authentication on the dashboard, a PII retention policy, and storing
   candidate JSON without `ensure_ascii` so accented names aren't escaped.
-- **Quality evals.** The current tests verify plumbing (LLM calls mocked); add golden-
-  transcript evals that exercise extraction and conversation quality against a live model.
+- **Quality evals.** Golden extraction evals can now be run manually against a live model;
+  conversation-quality evals and LLM-as-judge rubrics remain future work.
 - **Voice agent** (bonus tier) and an **ATS integration** API spec.
 - Remove the unused `disqualified` candidate status (triage currently lives on `bot_label`).

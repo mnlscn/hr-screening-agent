@@ -4,11 +4,16 @@ import json
 from dataclasses import dataclass
 from typing import Any, cast
 
+import pytest
 from anthropic.types import MessageParam
 
 from screening.domain.models import CandidateProfile, DeliveryExperience
 from screening.domain.service_areas import load_service_area_names
-from screening.llm.extraction import CandidateExtractor, EXTRACTION_OUTPUT_CONFIG
+from screening.llm.extraction import (
+    EXTRACTION_FIELDS,
+    EXTRACTION_OUTPUT_CONFIG,
+    CandidateExtractor,
+)
 
 
 @dataclass
@@ -76,11 +81,19 @@ def test_extractor_prompt_includes_context_without_output_shape():
 def test_extraction_output_config_uses_strict_json_schema():
     assert extraction_output_format()["type"] == "json_schema"
     schema = extraction_schema()
+    schema_text = json.dumps(schema)
 
     assert schema["additionalProperties"] is False
-    assert schema["$defs"]["DeliveryExperience"]["additionalProperties"] is False
-    assert city_zone_string_schema()["enum"] == list(load_service_area_names())
-    assert len(city_zone_string_schema()["enum"]) == 45
+    assert schema["required"] == list(EXTRACTION_FIELDS)
+    assert "$defs" not in schema
+    assert "$ref" not in schema_text
+    assert "default" not in schema_text
+    assert "title" not in schema_text
+    assert "description" not in schema_text
+    assert "enum" not in city_zone_string_schema()
+    experience = schema["properties"]["prior_delivery_experience"]["anyOf"][0]
+    assert experience["additionalProperties"] is False
+    assert experience["required"] == ["years", "platform"]
 
 
 def test_extract_uses_structured_output_and_merges_profile():
@@ -138,3 +151,22 @@ def test_extract_null_experience_does_not_overwrite_existing_experience():
         years=1,
         platform="Uber Eats",
     )
+
+
+def test_extract_rejects_non_canonical_city_zone_locally():
+    client = FakeClient(
+        json.dumps(
+            {
+                "raw_city_zone": "Paris",
+                "city_zone": "Paris",
+                "city_zone_status": "Matched",
+            }
+        )
+    )
+    extractor = CandidateExtractor(client=cast(Any, client))
+
+    with pytest.raises(ValueError, match="city_zone must be a canonical service area"):
+        extractor.extract(
+            messages=[cast(MessageParam, {"role": "user", "content": "Paris"})],
+            current_profile=CandidateProfile(),
+        )

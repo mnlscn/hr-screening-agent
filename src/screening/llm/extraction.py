@@ -48,28 +48,72 @@ class ProfileExtraction(BaseModel):
     start_date: str | None = None
 
 
-def _build_extraction_schema() -> dict[str, Any]:
-    """Return the extraction JSON schema with a dynamic service-area enum."""
-    schema = ProfileExtraction.model_json_schema()
-    city_schema = schema["properties"]["city_zone"]
-    service_areas = list(load_service_area_names())
+EXTRACTION_FIELDS = (
+    "conversation_language",
+    "full_name",
+    "raw_drivers_license",
+    "drivers_license",
+    "raw_city_zone",
+    "city_zone",
+    "city_zone_status",
+    "availability",
+    "preferred_schedule",
+    "prior_delivery_experience",
+    "start_date",
+)
 
-    for branch in city_schema.get("anyOf", []):
-        if isinstance(branch, dict) and branch.get("type") == "string":
-            branch["enum"] = service_areas
-            break
-    else:
-        if city_schema.get("type") != "string":
-            raise RuntimeError("city_zone schema does not contain a string branch")
-        city_schema["enum"] = service_areas
 
-    return schema
+def _nullable(schema: dict[str, Any]) -> dict[str, Any]:
+    return {"anyOf": [schema, {"type": "null"}]}
 
 
 EXTRACTION_OUTPUT_CONFIG: OutputConfigParam = {
     "format": {
         "type": "json_schema",
-        "schema": _build_extraction_schema(),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(EXTRACTION_FIELDS),
+            "properties": {
+                "conversation_language": _nullable(
+                    {"type": "string", "enum": ["English", "Spanish", "Mixed"]}
+                ),
+                "full_name": _nullable({"type": "string"}),
+                "raw_drivers_license": _nullable({"type": "string"}),
+                "drivers_license": _nullable(
+                    {"type": "string", "enum": ["Yes", "No", "Pending", "Unknown"]}
+                ),
+                "raw_city_zone": _nullable({"type": "string"}),
+                "city_zone": _nullable({"type": "string"}),
+                "city_zone_status": _nullable(
+                    {
+                        "type": "string",
+                        "enum": ["Matched", "Needs clarification", "Unsupported"],
+                    }
+                ),
+                "availability": _nullable(
+                    {"type": "string", "enum": ["Full-time", "Part-time", "Weekends"]}
+                ),
+                "preferred_schedule": _nullable(
+                    {
+                        "type": "string",
+                        "enum": ["Morning", "Afternoon", "Evening", "Flexible"],
+                    }
+                ),
+                "prior_delivery_experience": _nullable(
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["years", "platform"],
+                        "properties": {
+                            "years": _nullable({"type": "number"}),
+                            "platform": _nullable({"type": "string"}),
+                        },
+                    }
+                ),
+                "start_date": _nullable({"type": "string"}),
+            },
+        },
     }
 }
 

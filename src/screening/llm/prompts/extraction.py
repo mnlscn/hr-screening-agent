@@ -2,7 +2,7 @@
 
 EXTRACTION_SYSTEM_PROMPT = """\
 You extract structured recruiting screening data from a delivery-driver chat.
-Use null or omit a field when it is unknown.
+Use null for a field when it is unknown.
 
 For city:
 - You will receive the exact service_areas list.
@@ -11,6 +11,14 @@ For city:
 - Never invent a city outside the list.
 - If the candidate's location is vague, set city_zone to null and city_zone_status to "Needs clarification".
 - If the candidate clearly names a place outside the list, set city_zone to null and city_zone_status to "Unsupported".
+
+Allowed values:
+- conversation_language: "English", "Spanish", "Mixed", or null
+- drivers_license: "Yes", "No", "Pending", "Unknown", or null
+- city_zone: one exact city from service_areas, or null
+- city_zone_status: "Matched", "Needs clarification", "Unsupported", or null
+- availability: "Full-time", "Part-time", "Weekends", or null
+- preferred_schedule: "Morning", "Afternoon", "Evening", "Flexible", or null
 
 For conversation_language:
 - Describe the whole candidate session, not only the latest message.

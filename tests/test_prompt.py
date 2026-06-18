@@ -25,7 +25,7 @@ def test_extraction_prompt_lives_with_prompts():
     assert "service_areas" in EXTRACTION_SYSTEM_PROMPT
     assert "drivers_license" in EXTRACTION_SYSTEM_PROMPT
     assert "conversation_language" in EXTRACTION_SYSTEM_PROMPT
-    assert "Use null or omit a field when it is unknown" in EXTRACTION_SYSTEM_PROMPT
+    assert "Use null for a field when it is unknown" in EXTRACTION_SYSTEM_PROMPT
     assert "valid for driving in Spain or Mexico" in EXTRACTION_SYSTEM_PROMPT
     assert "Any driving license issued by an EU country is valid" in (
         EXTRACTION_SYSTEM_PROMPT

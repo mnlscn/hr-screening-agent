@@ -21,3 +21,5 @@ data/*.sqlite3-shm
 data/*.sqlite3-wal
 logs/
 .claude/
+
+todo.txt

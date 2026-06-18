@@ -223,6 +223,28 @@ def test_save_candidate_session_creates_loadable_agent_state(tmp_path):
     assert state.status == "active"
 
 
+def test_saved_session_db_path_survives_cwd_changes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = CandidateProfile(full_name="Luis Perez")
+    messages = [cast(MessageParam, {"role": "assistant", "content": "Hola"})]
+
+    saved = save_candidate_session(profile, messages, db_path="data/screening.sqlite3")
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    save_candidate_profile(
+        saved.candidate_id,
+        CandidateProfile(full_name="Luis Perez Garcia"),
+        db_path=saved.db_path,
+    )
+    loaded = load_candidate(saved.candidate_id, db_path=saved.db_path)
+
+    assert saved.db_path.is_absolute()
+    assert loaded is not None
+    assert loaded.profile.full_name == "Luis Perez Garcia"
+
+
 def test_candidate_summary_fields_round_trip(tmp_path):
     db_path = tmp_path / "screening.sqlite3"
     candidate_id = create_candidate(db_path=db_path)

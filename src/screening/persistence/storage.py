@@ -129,9 +129,8 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
     Returns:
         Path: The resolved database path.
     """
-    database_path = Path(db_path)
-    cache_key = database_path.resolve()
-    if cache_key in _initialized_paths:
+    database_path = Path(db_path).expanduser().resolve()
+    if database_path in _initialized_paths:
         return database_path
 
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,7 +194,7 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
             """
         )
 
-    _initialized_paths.add(cache_key)
+    _initialized_paths.add(database_path)
     return database_path
 
 
