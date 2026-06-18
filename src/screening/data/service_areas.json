@@ -6,7 +6,23 @@
     "Sevilla": { "lat": 37.3891, "lon": -5.9845 },
     "Malaga": { "lat": 36.7213, "lon": -4.4214 },
     "Zaragoza": { "lat": 41.6488, "lon": -0.8891 },
-    "Bilbao": { "lat": 43.263, "lon": -2.935 }
+    "Bilbao": { "lat": 43.263, "lon": -2.935 },
+    "Murcia": { "lat": 37.9922, "lon": -1.1307 },
+    "Palma de Mallorca": { "lat": 39.5696, "lon": 2.6502 },
+    "Las Palmas de Gran Canaria": { "lat": 28.1235, "lon": -15.4363 },
+    "Alicante": { "lat": 38.3452, "lon": -0.481 },
+    "Cordoba": { "lat": 37.8882, "lon": -4.7794 },
+    "Valladolid": { "lat": 41.6523, "lon": -4.7245 },
+    "Vigo": { "lat": 42.2406, "lon": -8.7207 },
+    "Gijon": { "lat": 43.5322, "lon": -5.6611 },
+    "Granada": { "lat": 37.1773, "lon": -3.5986 },
+    "A Coruna": { "lat": 43.3623, "lon": -8.4115 },
+    "Santa Cruz de Tenerife": { "lat": 28.4636, "lon": -16.2518 },
+    "Pamplona": { "lat": 42.8125, "lon": -1.6458 },
+    "Almeria": { "lat": 36.834, "lon": -2.4637 },
+    "San Sebastian": { "lat": 43.3183, "lon": -1.9812 },
+    "Santander": { "lat": 43.4623, "lon": -3.8099 },
+    "Tarragona": { "lat": 41.1189, "lon": 1.2445 }
   },
   "Mexico": {
     "Ciudad de Mexico": { "lat": 19.4326, "lon": -99.1332 },
@@ -14,6 +30,22 @@
     "Monterrey": { "lat": 25.6866, "lon": -100.3161 },
     "Puebla": { "lat": 19.0414, "lon": -98.2063 },
     "Queretaro": { "lat": 20.5888, "lon": -100.3899 },
-    "Merida": { "lat": 20.9674, "lon": -89.5926 }
+    "Merida": { "lat": 20.9674, "lon": -89.5926 },
+    "Tijuana": { "lat": 32.5149, "lon": -117.0382 },
+    "Leon": { "lat": 21.125, "lon": -101.686 },
+    "Ciudad Juarez": { "lat": 31.6904, "lon": -106.4245 },
+    "Zapopan": { "lat": 20.7214, "lon": -103.3918 },
+    "Cancun": { "lat": 21.1619, "lon": -86.8515 },
+    "Toluca": { "lat": 19.2826, "lon": -99.6557 },
+    "Aguascalientes": { "lat": 21.8853, "lon": -102.2916 },
+    "San Luis Potosi": { "lat": 22.1565, "lon": -100.9855 },
+    "Mexicali": { "lat": 32.6245, "lon": -115.4523 },
+    "Culiacan": { "lat": 24.8091, "lon": -107.394 },
+    "Chihuahua": { "lat": 28.632, "lon": -106.0691 },
+    "Hermosillo": { "lat": 29.0729, "lon": -110.9559 },
+    "Saltillo": { "lat": 25.4232, "lon": -101.0053 },
+    "Morelia": { "lat": 19.706, "lon": -101.195 },
+    "Veracruz": { "lat": 19.1738, "lon": -96.1342 },
+    "Torreon": { "lat": 25.5428, "lon": -103.4068 }
   }
 }
