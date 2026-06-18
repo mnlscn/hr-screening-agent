@@ -26,7 +26,10 @@ def test_extraction_prompt_lives_with_prompts():
     assert "conversation_language" in EXTRACTION_SYSTEM_PROMPT
     assert '"English", "Spanish", "Mixed"' in EXTRACTION_SYSTEM_PROMPT
     assert "valid for driving in Spain or Mexico" in EXTRACTION_SYSTEM_PROMPT
-    assert "car, truck, and motorbike" in EXTRACTION_SYSTEM_PROMPT
+    assert "Any driving license issued by an EU country is valid" in (
+        EXTRACTION_SYSTEM_PROMPT
+    )
+    assert "Do not require one vehicle type over another" in EXTRACTION_SYSTEM_PROMPT
     assert "set years to 0 and platform to null" in EXTRACTION_SYSTEM_PROMPT
 
 
@@ -100,15 +103,17 @@ def test_service_area_questions_are_deflected_in_chat_prompt():
 def test_license_and_city_questions_are_scoped_to_spain_and_mexico():
     prompt = build_system_prompt(CandidateProfile(full_name="Giacomo Ortiz"))
 
-    assert "car, truck, or motorbike license is valid" in prompt
+    assert "ask only whether they have a driver's license valid" in prompt
     assert "city or zone in Spain or Mexico" in prompt
 
 
-def test_motorbike_is_accepted_in_chat_prompt():
+def test_eu_and_vehicle_license_types_are_accepted_in_chat_prompt():
     prompt = build_system_prompt(CandidateProfile(full_name="Giacomo Ortiz"))
 
-    assert "Accepted vehicle license types are car, truck, and motorbike" in prompt
-    assert "Never say motorbike is not accepted" in prompt
+    assert "Any driving license issued by an EU country is valid" in prompt
+    assert "Car, truck, and motorbike licenses are all acceptable" in prompt
+    assert "Do not ask which of those vehicle types their license is for" in prompt
+    assert "never say motorbike is not accepted" in prompt
 
 
 def test_no_delivery_experience_does_not_trigger_extra_driving_questions():

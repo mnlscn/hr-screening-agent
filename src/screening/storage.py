@@ -12,12 +12,21 @@ from screening.config import SCREENING_DB_PATH
 from screening.models import CandidateProfile
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ACTIVE_STATUS = "active"
 COMPLETED_STATUS = "completed"
 DISQUALIFIED_STATUS = "disqualified"
 VALID_STATUSES = {ACTIVE_STATUS, COMPLETED_STATUS, DISQUALIFIED_STATUS}
 FINAL_STATUSES = {COMPLETED_STATUS, DISQUALIFIED_STATUS}
+PENDING_SUMMARY_STATUS = "pending"
+COMPLETED_SUMMARY_STATUS = "completed"
+FAILED_SUMMARY_STATUS = "failed"
+VALID_SUMMARY_STATUSES = {
+    PENDING_SUMMARY_STATUS,
+    COMPLETED_SUMMARY_STATUS,
+    FAILED_SUMMARY_STATUS,
+}
+VALID_BOT_LABELS = {"eligible", "not_eligible", "needs_review"}
 
 
 @dataclass(frozen=True)
@@ -28,6 +37,12 @@ class StoredCandidate:
     started_at: str
     updated_at: str
     completed_at: str | None
+    hr_summary: str | None
+    bot_label: str | None
+    summary_status: str | None
+    summary_model: str | None
+    summary_error: str | None
+    summary_generated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -39,6 +54,12 @@ class CandidateConversationState:
     started_at: str
     updated_at: str
     completed_at: str | None
+    hr_summary: str | None
+    bot_label: str | None
+    summary_status: str | None
+    summary_model: str | None
+    summary_error: str | None
+    summary_generated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -84,7 +105,13 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 ),
                 started_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                completed_at TEXT
+                completed_at TEXT,
+                hr_summary TEXT,
+                bot_label TEXT,
+                summary_status TEXT,
+                summary_model TEXT,
+                summary_error TEXT,
+                summary_generated_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS messages (
@@ -110,13 +137,7 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 ON messages(candidate_id, position);
             """
         )
-        connection.execute(
-            """
-            INSERT OR IGNORE INTO schema_migrations (version, applied_at)
-            VALUES (?, ?)
-            """,
-            (SCHEMA_VERSION, _utc_now()),
-        )
+        _migrate_database(connection)
 
     return database_path
 
@@ -162,7 +183,18 @@ def load_candidate(
     with _connect(database_path) as connection:
         row = connection.execute(
             """
-            SELECT id, profile_json, status, started_at, updated_at, completed_at
+            SELECT id,
+                   profile_json,
+                   status,
+                   started_at,
+                   updated_at,
+                   completed_at,
+                   hr_summary,
+                   bot_label,
+                   summary_status,
+                   summary_model,
+                   summary_error,
+                   summary_generated_at
             FROM candidates
             WHERE id = ?
             """,
@@ -179,6 +211,12 @@ def load_candidate(
         started_at=str(row["started_at"]),
         updated_at=str(row["updated_at"]),
         completed_at=cast(str | None, row["completed_at"]),
+        hr_summary=cast(str | None, row["hr_summary"]),
+        bot_label=cast(str | None, row["bot_label"]),
+        summary_status=cast(str | None, row["summary_status"]),
+        summary_model=cast(str | None, row["summary_model"]),
+        summary_error=cast(str | None, row["summary_error"]),
+        summary_generated_at=cast(str | None, row["summary_generated_at"]),
     )
 
 
@@ -326,6 +364,12 @@ def load_agent_state(
         started_at=candidate.started_at,
         updated_at=candidate.updated_at,
         completed_at=candidate.completed_at,
+        hr_summary=candidate.hr_summary,
+        bot_label=candidate.bot_label,
+        summary_status=candidate.summary_status,
+        summary_model=candidate.summary_model,
+        summary_error=candidate.summary_error,
+        summary_generated_at=candidate.summary_generated_at,
     )
 
 
@@ -356,11 +400,161 @@ def save_candidate_session(
     return SavedCandidateSession(candidate_id=candidate_id, db_path=database_path)
 
 
+def mark_candidate_summary_pending(
+    candidate_id: str,
+    *,
+    db_path: str | Path = SCREENING_DB_PATH,
+    model: str | None = None,
+) -> None:
+    database_path = init_database(db_path)
+    now = _utc_now()
+
+    with _connect(database_path) as connection:
+        result = connection.execute(
+            """
+            UPDATE candidates
+            SET summary_status = ?,
+                summary_model = ?,
+                summary_error = NULL,
+                summary_generated_at = NULL,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (PENDING_SUMMARY_STATUS, model, now, candidate_id),
+        )
+
+    if result.rowcount == 0:
+        raise KeyError(f"candidate not found: {candidate_id}")
+
+
+def save_candidate_summary(
+    candidate_id: str,
+    *,
+    hr_summary: str,
+    bot_label: str,
+    model: str,
+    db_path: str | Path = SCREENING_DB_PATH,
+) -> None:
+    if bot_label not in VALID_BOT_LABELS:
+        raise ValueError(f"invalid bot label: {bot_label}")
+
+    database_path = init_database(db_path)
+    now = _utc_now()
+    with _connect(database_path) as connection:
+        result = connection.execute(
+            """
+            UPDATE candidates
+            SET hr_summary = ?,
+                bot_label = ?,
+                summary_status = ?,
+                summary_model = ?,
+                summary_error = NULL,
+                summary_generated_at = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                hr_summary,
+                bot_label,
+                COMPLETED_SUMMARY_STATUS,
+                model,
+                now,
+                now,
+                candidate_id,
+            ),
+        )
+
+    if result.rowcount == 0:
+        raise KeyError(f"candidate not found: {candidate_id}")
+
+
+def save_candidate_summary_failure(
+    candidate_id: str,
+    *,
+    error: str,
+    model: str | None,
+    db_path: str | Path = SCREENING_DB_PATH,
+) -> None:
+    database_path = init_database(db_path)
+    now = _utc_now()
+    with _connect(database_path) as connection:
+        result = connection.execute(
+            """
+            UPDATE candidates
+            SET bot_label = ?,
+                summary_status = ?,
+                summary_model = ?,
+                summary_error = ?,
+                summary_generated_at = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                "needs_review",
+                FAILED_SUMMARY_STATUS,
+                model,
+                error,
+                now,
+                now,
+                candidate_id,
+            ),
+        )
+
+    if result.rowcount == 0:
+        raise KeyError(f"candidate not found: {candidate_id}")
+
+
 def _connect(db_path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
+
+
+def _migrate_database(connection: sqlite3.Connection) -> None:
+    applied_versions = {
+        int(row["version"])
+        for row in connection.execute("SELECT version FROM schema_migrations")
+    }
+
+    if 1 not in applied_versions:
+        _record_schema_migration(connection, 1)
+
+    if 2 not in applied_versions:
+        _migrate_to_v2(connection)
+        _record_schema_migration(connection, 2)
+
+
+def _record_schema_migration(
+    connection: sqlite3.Connection,
+    version: int,
+) -> None:
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+        VALUES (?, ?)
+        """,
+        (version, _utc_now()),
+    )
+
+
+def _migrate_to_v2(connection: sqlite3.Connection) -> None:
+    existing_columns = {
+        str(row["name"]) for row in connection.execute("PRAGMA table_info(candidates)")
+    }
+    summary_columns = {
+        "hr_summary": "TEXT",
+        "bot_label": "TEXT",
+        "summary_status": "TEXT",
+        "summary_model": "TEXT",
+        "summary_error": "TEXT",
+        "summary_generated_at": "TEXT",
+    }
+    for column_name, column_type in summary_columns.items():
+        if column_name not in existing_columns:
+            connection.execute(
+                f"ALTER TABLE candidates ADD COLUMN {column_name} {column_type}"
+            )
 
 
 def _utc_now() -> str:
@@ -379,8 +573,6 @@ def _normalize_status(status: str | None, profile: CandidateProfile) -> str:
 
 
 def _status_from_profile(profile: CandidateProfile) -> str:
-    if profile.is_disqualified:
-        return DISQUALIFIED_STATUS
     if profile.is_complete:
         return COMPLETED_STATUS
     return ACTIVE_STATUS

@@ -69,10 +69,11 @@ For conversation_language:
 
 For drivers_license:
 - Use "Yes" only when the candidate has a license that is valid for driving in Spain or Mexico, depending on where they want to work.
+- Any driving license issued by an EU country is valid for driving in Spain.
 - Use "No" when they clearly do not have a license, or only mention a license that cannot be used to drive in Spain or Mexico.
 - Use "Pending" for answers like "I'm taking it next week" or "I'm in the process".
 - Use "Unknown" when they have a license but it is unclear whether it is valid in Spain or Mexico.
-- Accepted vehicle license types are car, truck, and motorbike. Treat all three as potentially valid if the license can be used in Spain or Mexico.
+- Car, truck, and motorbike licenses are all acceptable. Do not require one vehicle type over another.
 
 prior_delivery_experience must be an object with:
 - years: number or null
@@ -120,8 +121,9 @@ Screening flow:
 - First clarify any clarification_fields, then collect missing_fields in order.
 - If next_field_to_collect is full_name and the profile already has only one name, ask for their surname or last name.
 - Service areas are internal. Never list, suggest, confirm, or deny available service areas.
-- Driver roles are only in Spain and Mexico. When asking about license validity, ask whether their car, truck, or motorbike license is valid for driving in Spain or Mexico.
-- Accepted vehicle license types are car, truck, and motorbike. Never say motorbike is not accepted.
+- Driver roles are only in Spain and Mexico. When asking about license validity, ask only whether they have a driver's license valid for Spain or Mexico.
+- Any driving license issued by an EU country is valid for driving in Spain. If the candidate has an EU-country license and wants to work in Spain, acknowledge it and move on.
+- Car, truck, and motorbike licenses are all acceptable. Do not ask which of those vehicle types their license is for, and never say motorbike is not accepted.
 - When asking where they want to work, ask for their city or zone in Spain or Mexico.
 - If the candidate asks which areas are available, say a recruiter will review coverage and ask which city or zone in Spain or Mexico they want to work in.
 - If the candidate names or changes a city or zone, acknowledge it neutrally and continue collecting the next needed field. Do not say it works, is supported, is available, or is not available.
