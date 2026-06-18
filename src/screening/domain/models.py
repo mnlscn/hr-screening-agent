@@ -14,15 +14,14 @@ PreferredSchedule = Literal["Morning", "Afternoon", "Evening", "Flexible"]
 ConversationLanguage = Literal["English", "Spanish", "Mixed"]
 
 BotLabel = Literal["eligible", "not_eligible", "needs_review"]
-CandidateStatus = Literal["active", "completed", "disqualified"]
+CandidateStatus = Literal["active", "completed"]
 
 VALID_BOT_LABELS: frozenset[str] = frozenset(get_args(BotLabel))
 
 ACTIVE_STATUS: CandidateStatus = "active"
 COMPLETED_STATUS: CandidateStatus = "completed"
-DISQUALIFIED_STATUS: CandidateStatus = "disqualified"
 VALID_STATUSES: frozenset[str] = frozenset(get_args(CandidateStatus))
-FINAL_STATUSES: frozenset[str] = frozenset({COMPLETED_STATUS, DISQUALIFIED_STATUS})
+FINAL_STATUSES: frozenset[str] = frozenset({COMPLETED_STATUS})
 
 REQUIRED_FIELDS = (
     "full_name",

@@ -32,8 +32,7 @@ class StoredCandidate:
     Attributes:
         id (str): Candidate identifier.
         profile (CandidateProfile): The stored candidate profile.
-        status (str): Lifecycle status: "active", "completed", or
-            "disqualified".
+        status (str): Lifecycle status: "active" or "completed".
         started_at (str): ISO timestamp when the screening started.
         updated_at (str): ISO timestamp of the last update.
         completed_at (str | None): ISO timestamp when finalized, or None.
@@ -70,8 +69,7 @@ class CandidateConversationState:
         candidate_id (str): Candidate identifier.
         profile (CandidateProfile): The stored candidate profile.
         messages (list[MessageParam]): The full conversation transcript.
-        status (str): Lifecycle status: "active", "completed", or
-            "disqualified".
+        status (str): Lifecycle status: "active" or "completed".
         started_at (str): ISO timestamp when the screening started.
         updated_at (str): ISO timestamp of the last update.
         completed_at (str | None): ISO timestamp when finalized, or None.
@@ -162,7 +160,7 @@ def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
                 profile_json TEXT NOT NULL,
                 -- mirrors VALID_STATUSES in screening.domain.models (DDL can't import Python)
                 status TEXT NOT NULL CHECK (
-                    status IN ('active', 'completed', 'disqualified')
+                    status IN ('active', 'completed')
                 ),
                 started_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -415,9 +413,9 @@ def save_candidate_profile(
                 clarification_fields = :clarification_fields,
                 disqualification_reasons = :disqualification_reasons,
                 profile_json = :profile_json,
-                -- 'completed'/'disqualified' mirror FINAL_STATUSES in screening.domain.models
+                -- 'completed' mirrors FINAL_STATUSES in screening.domain.models
                 status = CASE
-                    WHEN status IN ('completed', 'disqualified')
+                    WHEN status = 'completed'
                          AND :status = 'active' THEN status
                     ELSE :status
                 END,

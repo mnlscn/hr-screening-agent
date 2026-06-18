@@ -218,14 +218,8 @@ def test_candidate_finality_comes_from_lifecycle_status_not_summary_status():
         status="active",
         summary_status="completed",
     )
-    disqualified_candidate = _stored_candidate(
-        FakeUiAgent("disqualified-1"),
-        status="disqualified",
-        summary_status=None,
-    )
 
     assert ui_state.is_finalized(completed_without_summary)
-    assert ui_state.is_finalized(disqualified_candidate)
     assert not ui_state.is_finalized(active_with_summary)
 
 
