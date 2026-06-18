@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -37,6 +38,23 @@ class FakeClient:
         self.messages = FakeMessages(response_text)
 
 
+MARKDOWN_HR_SUMMARY = """\
+**Candidate Brief**
+Maria Garcia is applying for delivery work in Madrid.
+
+**Screening Facts**
+- License: Valid driver license reported.
+- Availability: Full-time, morning schedule.
+- Experience: 2 years with Glovo.
+
+**Conversation Notes**
+- Candidate replied politely and clearly.
+
+**Follow-Up Suggestions**
+1. Confirm start date during onboarding.
+"""
+
+
 def complete_profile() -> CandidateProfile:
     return CandidateProfile(
         full_name="Maria Garcia",
@@ -73,8 +91,7 @@ def test_determine_bot_label_for_incomplete_or_failed_extraction():
 
 def test_summarizer_uses_metadata_and_full_transcript():
     client = FakeClient(
-        '{"bot_label":"eligible",'
-        '"hr_summary":"Maria has a valid license, wants Madrid, and replied politely."}'
+        json.dumps({"bot_label": "eligible", "hr_summary": MARKDOWN_HR_SUMMARY})
     )
     summarizer = CandidateSummarizer(client=cast(Any, client))
     transcript = [
@@ -85,6 +102,10 @@ def test_summarizer_uses_metadata_and_full_transcript():
     summary = summarizer.summarize(complete_profile(), transcript)
 
     assert summary.bot_label == "eligible"
+    assert summary.hr_summary.startswith("**Candidate Brief**")
+    assert "**Screening Facts**" in summary.hr_summary
+    assert "**Conversation Notes**" in summary.hr_summary
+    assert "**Follow-Up Suggestions**" in summary.hr_summary
     assert "replied politely" in summary.hr_summary
     call = client.messages.calls[0]
     assert call["model"] == "claude-sonnet-4-6"
@@ -93,11 +114,28 @@ def test_summarizer_uses_metadata_and_full_transcript():
     assert "full_transcript" in prompt
     assert "Gracias, soy Maria Garcia" in prompt
     assert "politeness" in call["system"]
+    assert "**Candidate Brief**" in call["system"]
+    assert "**Screening Facts**" in call["system"]
 
 
 def test_summarizer_keeps_incomplete_profile_as_needs_review():
     client = FakeClient(
-        '{"bot_label":"eligible","hr_summary":"Luis replied clearly but is incomplete."}'
+        json.dumps(
+            {
+                "bot_label": "eligible",
+                "hr_summary": (
+                    "**Candidate Brief**\n"
+                    "Luis Perez has started the screening but the profile is "
+                    "incomplete.\n\n"
+                    "**Screening Facts**\n"
+                    "- Missing required screening information.\n\n"
+                    "**Conversation Notes**\n"
+                    "- Candidate replied clearly.\n\n"
+                    "**Follow-Up Suggestions**\n"
+                    "1. Collect the missing fields before HR review."
+                ),
+            }
+        )
     )
     summarizer = CandidateSummarizer(client=cast(Any, client))
 

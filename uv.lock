@@ -1248,6 +1248,7 @@ name = "screening"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "altair" },
     { name = "anthropic" },
     { name = "load-dotenv" },
     { name = "pydantic" },
@@ -1264,6 +1265,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", specifier = ">=6.2.1" },
     { name = "anthropic", specifier = ">=0.109.2" },
     { name = "load-dotenv", specifier = ">=0.1.0" },
     { name = "pydantic", specifier = ">=2.13.4" },

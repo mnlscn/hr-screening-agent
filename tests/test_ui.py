@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import UTC, datetime
 from typing import cast
 
 from anthropic.types import MessageParam
@@ -6,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 import screening.ui as ui
 from screening.agent import AgentStream
-from screening.models import CandidateProfile, DeliveryExperience
+from screening.models import CandidateProfile, DeliveryExperience, DriverLicense
 from screening.session import FinalizedCandidateSession
 from screening.storage import StoredCandidate
 
@@ -160,8 +161,9 @@ def test_dashboard_renders_candidates_without_anthropic(monkeypatch):
     app.run()
 
     assert not app.exception
-    assert any("Elena Eligible" in markdown.value for markdown in app.markdown)
-    assert any("Rafael Review" in markdown.value for markdown in app.markdown)
+    expander_labels = [expander.label for expander in app.expander]
+    assert any("Elena Eligible · Eligible" in label for label in expander_labels)
+    assert any("Rafael Review · Needs review" in label for label in expander_labels)
     assert any(ui.ANTHROPIC_API_KEY_ENV in alert.value for alert in app.error)
 
 
@@ -233,18 +235,222 @@ def test_dashboard_open_chat_resumes_candidate(monkeypatch):
     assert resumed_candidate_ids == ["dashboard-1"]
 
 
+def test_analytics_kpis_handle_empty_candidates_and_duration_stats():
+    assert ui._analytics_kpis([]) == ui.AnalyticsKpis(
+        started=0,
+        completed=0,
+        completion_rate=0,
+        qualified=0,
+        needs_review=0,
+        average_duration_minutes=None,
+        median_duration_minutes=None,
+    )
+
+    candidates = [
+        _stored_candidate(
+            FakeUiAgent("eligible-1"),
+            city_zone="Madrid",
+            status="completed",
+            bot_label="eligible",
+            started_at="2026-01-01T10:00:00+00:00",
+            completed_at="2026-01-01T10:10:00+00:00",
+        ),
+        _stored_candidate(
+            FakeUiAgent("review-1"),
+            city_zone="Barcelona",
+            status="completed",
+            bot_label="needs_review",
+            started_at="2026-01-01T10:00:00+00:00",
+            completed_at="2026-01-01T10:30:00+00:00",
+        ),
+        _stored_candidate(
+            FakeUiAgent("active-1"),
+            city_zone=None,
+            status="active",
+            bot_label=None,
+        ),
+    ]
+
+    kpis = ui._analytics_kpis(candidates)
+
+    assert kpis.started == 3
+    assert kpis.completed == 2
+    assert kpis.completion_rate == 2 / 3
+    assert kpis.qualified == 1
+    assert kpis.needs_review == 2
+    assert kpis.average_duration_minutes == 20
+    assert kpis.median_duration_minutes == 20
+
+
+def test_dropoff_stage_prioritizes_clarification_then_missing_fields():
+    clarification_candidate = _stored_candidate(
+        FakeUiAgent("clarify-1"),
+        city_zone="Madrid",
+        status="active",
+        drivers_license="Unknown",
+    )
+    missing_candidate = _stored_candidate(
+        FakeUiAgent("missing-1"),
+        city_zone=None,
+        status="active",
+    )
+    completed_candidate = _stored_candidate(
+        FakeUiAgent("complete-1"),
+        city_zone="Madrid",
+        status="completed",
+        bot_label="eligible",
+        completed_at="2026-01-01T00:10:00+00:00",
+    )
+
+    assert ui._dropoff_stage(clarification_candidate) == "drivers_license"
+    assert ui._dropoff_stage(missing_candidate) == "city_zone"
+    assert ui._dropoff_stage(completed_candidate) is None
+
+
+def test_city_distribution_counts_known_and_unknown_cities():
+    candidates = [
+        _stored_candidate(
+            FakeUiAgent("madrid-eligible"),
+            city_zone="Madrid",
+            bot_label="eligible",
+        ),
+        _stored_candidate(
+            FakeUiAgent("madrid-review"),
+            city_zone="Madrid",
+            bot_label="needs_review",
+        ),
+        _stored_candidate(FakeUiAgent("unknown-city"), city_zone=None),
+    ]
+
+    rows = ui._city_distribution_rows(candidates)
+    rows_by_city = {str(row["city"]): row for row in rows}
+
+    assert rows_by_city["Madrid"]["count"] == 2
+    assert rows_by_city["Madrid"]["eligible_share"] == 0.5
+    assert rows_by_city["Madrid"]["lat"] == ui.CITY_COORDINATES["Madrid"][0]
+    assert rows_by_city["Madrid"]["size"] == ui.MAP_BUBBLE_SIZE_SCALE * 2
+    assert rows_by_city["Unknown"]["count"] == 1
+    assert rows_by_city["Unknown"]["lat"] is None
+
+
+def test_chart_rows_rank_largest_values_first():
+    rows: list[dict[str, object]] = [
+        {"stage": "Schedule", "candidates": 1},
+        {"stage": "Driver license", "candidates": 4},
+        {"stage": "Full name", "candidates": 2},
+    ]
+
+    ranked = ui._ranked_chart_rows(
+        rows,
+        value="candidates",
+        category="stage",
+    )
+
+    assert [row["stage"] for row in ranked] == [
+        "Driver license",
+        "Full name",
+        "Schedule",
+    ]
+
+
+def test_funnel_rows_preserve_required_field_order():
+    rows = ui._funnel_completion_rows([_stored_candidate(FakeUiAgent("candidate-1"))])
+
+    assert [row["stage"] for row in rows] == ui._funnel_stage_order()
+
+
+def test_city_summary_rows_rank_largest_cities_first():
+    rows: list[dict[str, object]] = [
+        {"city": "Barcelona", "count": 1, "eligible_count": 0, "eligible_share": 0},
+        {"city": "Madrid", "count": 3, "eligible_count": 2, "eligible_share": 2 / 3},
+    ]
+
+    summary = ui._city_summary_rows(rows)
+
+    assert [row["City"] for row in summary] == ["Madrid", "Barcelona"]
+    assert summary[0]["Candidates"] == 3
+    assert summary[0]["Eligible"] == 2
+    assert summary[0]["Eligible share"] == "67%"
+
+
+def test_stale_active_candidates_ignore_recent_and_completed_candidates():
+    candidates = [
+        _stored_candidate(
+            FakeUiAgent("old-active"),
+            status="active",
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+        _stored_candidate(
+            FakeUiAgent("recent-active"),
+            status="active",
+            updated_at="2026-01-02T11:00:00+00:00",
+        ),
+        _stored_candidate(
+            FakeUiAgent("old-completed"),
+            status="completed",
+            updated_at="2026-01-01T00:00:00+00:00",
+            completed_at="2026-01-01T00:10:00+00:00",
+        ),
+    ]
+
+    stale = ui._stale_active_candidates(
+        candidates,
+        now=datetime(2026, 1, 2, 12, 0, tzinfo=UTC),
+    )
+
+    assert [candidate.id for candidate in stale] == ["old-active"]
+
+
+def test_analytics_tab_renders_with_injected_candidates_without_anthropic(monkeypatch):
+    candidates = [
+        _stored_candidate(
+            FakeUiAgent("eligible-1"),
+            full_name="Elena Eligible",
+            city_zone="Madrid",
+            status="completed",
+            bot_label="eligible",
+            hr_summary="Elena is ready for HR review.",
+            completed_at="2026-01-01T00:10:00+00:00",
+        ),
+        _stored_candidate(
+            FakeUiAgent("active-1"),
+            full_name="Rafael Review",
+            city_zone=None,
+            status="active",
+            bot_label=None,
+        ),
+    ]
+
+    monkeypatch.delenv(ui.ANTHROPIC_API_KEY_ENV, raising=False)
+    monkeypatch.setattr(ui, "load_dotenv", lambda: None)
+    monkeypatch.setattr(ui, "list_candidates", lambda *, db_path: candidates)
+
+    app = AppTest.from_function(_run_ui_app)
+    app.run()
+
+    assert not app.exception
+    assert any("Screening funnel" in markdown.value for markdown in app.markdown)
+    assert any("City distribution" in markdown.value for markdown in app.markdown)
+    assert any("Stale active candidates" in markdown.value for markdown in app.markdown)
+
+
 def _stored_candidate(
     agent: FakeUiAgent,
     *,
     full_name: str = "Maria Garcia",
     city_zone: str | None = None,
+    drivers_license: DriverLicense = "Yes",
+    status: str = "active",
     bot_label: str | None = None,
     hr_summary: str | None = None,
     summary_status: str | None = None,
+    started_at: str = "2026-01-01T00:00:00+00:00",
+    updated_at: str = "2026-01-01T00:00:00+00:00",
+    completed_at: str | None = None,
 ) -> StoredCandidate:
     profile = CandidateProfile(
         full_name=full_name,
-        drivers_license="Yes",
+        drivers_license=drivers_license,
         raw_city_zone=city_zone,
         city_zone=city_zone,
         city_zone_status="Matched" if city_zone is not None else None,
@@ -256,10 +462,10 @@ def _stored_candidate(
     return StoredCandidate(
         id=agent.candidate_id,
         profile=profile,
-        status="active",
-        started_at="2026-01-01T00:00:00+00:00",
-        updated_at="2026-01-01T00:00:00+00:00",
-        completed_at=None,
+        status=status,
+        started_at=started_at,
+        updated_at=updated_at,
+        completed_at=completed_at,
         hr_summary=hr_summary,
         bot_label=bot_label,
         summary_status=summary_status,
