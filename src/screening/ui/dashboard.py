@@ -19,6 +19,12 @@ from screening.ui.state import open_candidate_chat
 
 
 def render_dashboard() -> None:
+    """Render the HR dashboard tab.
+
+    Shows headline metrics, filter controls, and candidate cards grouped into
+    triage lanes. Displays informational messages when there are no candidates
+    or no matches.
+    """
     candidates = list_candidates(db_path=SCREENING_DB_PATH)
     render_dashboard_metrics(candidates)
 
@@ -45,6 +51,11 @@ def render_dashboard() -> None:
 
 
 def render_dashboard_metrics(candidates: list[StoredCandidate]) -> None:
+    """Render the dashboard's headline metric row.
+
+    Args:
+        candidates (list[StoredCandidate]): All candidates to summarize.
+    """
     counts = triage_counts(candidates)
     active_count = sum(1 for candidate in candidates if candidate.status == "active")
     columns = st.columns(5)
@@ -56,6 +67,16 @@ def render_dashboard_metrics(candidates: list[StoredCandidate]) -> None:
 
 
 def render_dashboard_filters(candidates: list[StoredCandidate]) -> DashboardFilters:
+    """Render the dashboard filter controls and capture their selections.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates used to populate the
+            status and city option lists.
+
+    Returns:
+        DashboardFilters: The current triage, status, city, and search
+            selections.
+    """
     triage_options = [FILTER_ALL, *TRIAGE_TITLES.values()]
     status_options = [
         FILTER_ALL,
@@ -103,6 +124,14 @@ def render_dashboard_filters(candidates: list[StoredCandidate]) -> DashboardFilt
 
 
 def render_candidate_card(candidate: StoredCandidate) -> None:
+    """Render an expandable card for a single candidate.
+
+    Shows triage, an open-chat button, requirement rows, missing and
+    clarification fields, disqualification reasons, and the HR summary.
+
+    Args:
+        candidate (StoredCandidate): The candidate to render.
+    """
     with st.expander(candidate_card_label(candidate), expanded=False):
         header_columns = st.columns([1.1, 1])
         with header_columns[0]:

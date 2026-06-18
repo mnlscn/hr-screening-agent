@@ -59,6 +59,21 @@ CLARIFICATION_FIELD_LABELS = {
 
 
 def build_system_prompt(profile, latest_user_message: str | None = None) -> str:
+    """Assemble Lucia's full system prompt for the next assistant turn.
+
+    Combines the static persona prompt, the screening-flow rules, and a JSON
+    snapshot of the current profile, next field to collect, and language
+    instructions.
+
+    Args:
+        profile (CandidateProfile): The current candidate profile, used as the
+            source of truth for what to ask next.
+        latest_user_message (str | None): The candidate's most recent message,
+            used to detect the reply language.
+
+    Returns:
+        str: The complete system prompt string.
+    """
     next_field = get_next_field(profile)
     profile_context = {
         "profile": profile.model_dump(mode="json"),
@@ -100,6 +115,17 @@ Screening flow:
 
 
 def get_next_field(profile) -> str | None:
+    """Return the next field the agent should ask about.
+
+    Clarification fields take priority over missing fields.
+
+    Args:
+        profile (CandidateProfile): The current candidate profile.
+
+    Returns:
+        str | None: The next field name to collect, or None when nothing is
+            pending.
+    """
     if profile.clarification_fields:
         return profile.clarification_fields[0]
     if profile.missing_fields:
@@ -108,12 +134,34 @@ def get_next_field(profile) -> str | None:
 
 
 def format_field_goal(field: str | None) -> str | None:
+    """Return a human-readable collection goal for a field.
+
+    Prefers a clarification label and falls back to the required-field label.
+
+    Args:
+        field (str | None): The field name to describe.
+
+    Returns:
+        str | None: The goal description, or None when no field is given or no
+            label exists.
+    """
     if field is None:
         return None
     return CLARIFICATION_FIELD_LABELS.get(field) or REQUIRED_FIELD_LABELS.get(field)
 
 
 def detect_latest_user_language(message: str | None) -> str:
+    """Heuristically detect the language of the candidate's latest message.
+
+    Scores the message against English and Spanish marker words and Spanish
+    orthography.
+
+    Args:
+        message (str | None): The candidate's latest message text.
+
+    Returns:
+        str: One of "English", "Spanish", "Mixed", or "Unknown".
+    """
     if not message:
         return "Unknown"
 
@@ -170,6 +218,15 @@ def detect_latest_user_language(message: str | None) -> str:
 
 
 def format_reply_language_instruction(message: str | None) -> str:
+    """Build the reply-language instruction for the next assistant message.
+
+    Args:
+        message (str | None): The candidate's latest message text.
+
+    Returns:
+        str: An instruction telling the agent which language to reply in, based
+            on the detected language of the message.
+    """
     language = detect_latest_user_language(message)
     if language == "English":
         return "Reply in English for the next assistant message."

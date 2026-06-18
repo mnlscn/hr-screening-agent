@@ -9,6 +9,15 @@ from screening.domain.models import CandidateProfile, DeliveryExperience
 
 
 def format_experience(experience: DeliveryExperience | None) -> str:
+    """Format delivery experience as a human-readable string.
+
+    Args:
+        experience (DeliveryExperience | None): The experience to format.
+
+    Returns:
+        str: A comma-separated "years" and platform string, or "-" when there
+            is no experience data.
+    """
     if experience is None:
         return "-"
 
@@ -22,6 +31,14 @@ def format_experience(experience: DeliveryExperience | None) -> str:
 
 
 def format_value(value: object) -> str:
+    """Format an arbitrary value as display text, defaulting empties to "-".
+
+    Args:
+        value (object): The value to format.
+
+    Returns:
+        str: The stripped string form of the value, or "-" when None or empty.
+    """
     if value is None:
         return "-"
     value_text = str(value).strip()
@@ -29,11 +46,28 @@ def format_value(value: object) -> str:
 
 
 def format_list(values: Iterable[str]) -> str:
+    """Join non-empty values into a comma-separated string.
+
+    Args:
+        values (Iterable[str]): The values to join.
+
+    Returns:
+        str: The comma-separated non-empty values, or "-" when none remain.
+    """
     formatted_values = [value for value in values if value]
     return ", ".join(formatted_values) if formatted_values else "-"
 
 
 def format_timestamp(value: str | None) -> str:
+    """Format an ISO timestamp string as "YYYY-MM-DD HH:MM".
+
+    Args:
+        value (str | None): The ISO timestamp to format.
+
+    Returns:
+        str: The formatted timestamp, the raw value when it cannot be parsed,
+            or "-" when None.
+    """
     if value is None:
         return "-"
     try:
@@ -44,11 +78,30 @@ def format_timestamp(value: str | None) -> str:
 
 
 def candidate_started_date(started_at: str | None) -> date | None:
+    """Extract the calendar date from a candidate's start timestamp.
+
+    Args:
+        started_at (str | None): The ISO start timestamp.
+
+    Returns:
+        date | None: The UTC date, or None when the timestamp is missing or
+            unparseable.
+    """
     timestamp = parse_timestamp(started_at)
     return timestamp.date() if timestamp is not None else None
 
 
 def parse_timestamp(value: str | None) -> datetime | None:
+    """Parse an ISO timestamp into a timezone-aware UTC datetime.
+
+    Naive timestamps are assumed to be UTC; aware ones are converted to UTC.
+
+    Args:
+        value (str | None): The ISO timestamp to parse.
+
+    Returns:
+        datetime | None: The UTC datetime, or None when missing or unparseable.
+    """
     if value is None:
         return None
     try:
@@ -61,10 +114,27 @@ def parse_timestamp(value: str | None) -> datetime | None:
 
 
 def format_percent(value: float) -> str:
+    """Format a fraction as a whole-number percentage string.
+
+    Args:
+        value (float): The fraction to format (e.g. 0.5).
+
+    Returns:
+        str: The value rendered as a percentage with no decimals (e.g. "50%").
+    """
     return f"{value:.0%}"
 
 
 def format_duration(minutes: float | None) -> str:
+    """Format a duration in minutes as minutes or hours.
+
+    Args:
+        minutes (float | None): The duration in minutes.
+
+    Returns:
+        str: A minutes string under one hour, an hours string otherwise, or
+            "-" when None.
+    """
     if minutes is None:
         return "-"
     if minutes < 60:
@@ -74,6 +144,14 @@ def format_duration(minutes: float | None) -> str:
 
 
 def message_text(message: MessageParam) -> str:
+    """Return a message's content as plain text.
+
+    Args:
+        message (MessageParam): The message to read.
+
+    Returns:
+        str: The string content, or its ``str()`` form when not a plain string.
+    """
     content = message["content"]
     if isinstance(content, str):
         return content
@@ -81,6 +159,15 @@ def message_text(message: MessageParam) -> str:
 
 
 def profile_rows(profile: CandidateProfile) -> list[tuple[str, str]]:
+    """Build labeled display rows for a candidate profile.
+
+    Args:
+        profile (CandidateProfile): The profile to render.
+
+    Returns:
+        list[tuple[str, str]]: ``(label, formatted value)`` pairs for the
+            profile's display fields.
+    """
     return [
         ("Full name", format_value(profile.full_name)),
         ("Drivers license", format_value(profile.drivers_license)),
@@ -96,6 +183,15 @@ def profile_rows(profile: CandidateProfile) -> list[tuple[str, str]]:
 
 
 def short_candidate_id(candidate_id: str) -> str:
+    """Abbreviate a candidate identifier for compact display.
+
+    Args:
+        candidate_id (str): The full candidate identifier.
+
+    Returns:
+        str: The identifier unchanged when 12 characters or fewer, otherwise an
+            elided "prefix...suffix" form.
+    """
     if len(candidate_id) <= 12:
         return candidate_id
     return f"{candidate_id[:8]}...{candidate_id[-4:]}"

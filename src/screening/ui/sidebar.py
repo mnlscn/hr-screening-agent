@@ -14,6 +14,14 @@ from screening.ui.state import load_current_candidate
 
 
 def render_sidebar(agent: ChatAgent) -> None:
+    """Render the session sidebar for an active chat agent.
+
+    Provides controls to start a new candidate and finish the screening, and
+    shows session metadata, the candidate profile, and the HR summary.
+
+    Args:
+        agent (ChatAgent): The active chat agent.
+    """
     candidate = load_current_candidate(agent)
 
     with st.sidebar:
@@ -51,6 +59,7 @@ def render_sidebar(agent: ChatAgent) -> None:
 
 
 def render_sidebar_without_agent() -> None:
+    """Render the sidebar fallback shown when no chat agent is active."""
     with st.sidebar:
         st.header("Session")
         st.warning(f"{ANTHROPIC_API_KEY_ENV} is missing.")
@@ -63,6 +72,13 @@ def render_session_metadata(
     agent: ChatAgent,
     candidate: StoredCandidate | None,
 ) -> None:
+    """Render the candidate identity and session timestamps.
+
+    Args:
+        agent (ChatAgent): The active chat agent.
+        candidate (StoredCandidate | None): The stored candidate record, or
+            None when not yet persisted.
+    """
     st.subheader("Candidate")
     st.text(f"ID: {format_value(agent.candidate_id)}")
 
@@ -78,6 +94,12 @@ def render_session_metadata(
 
 
 def render_profile(profile: CandidateProfile, *, show_heading: bool = True) -> None:
+    """Render a candidate profile with its derived field lists.
+
+    Args:
+        profile (CandidateProfile): The profile to render.
+        show_heading (bool): Whether to render a "Profile" subheading.
+    """
     if show_heading:
         st.subheader("Profile")
 
@@ -93,6 +115,15 @@ def render_profile(profile: CandidateProfile, *, show_heading: bool = True) -> N
 
 
 def render_summary(candidate: StoredCandidate | None) -> None:
+    """Render the HR summary section for a candidate.
+
+    Renders nothing when the candidate is missing or has neither a bot label
+    nor an HR summary.
+
+    Args:
+        candidate (StoredCandidate | None): The candidate whose summary to
+            render.
+    """
     if candidate is None:
         return
     if candidate.bot_label is None and candidate.hr_summary is None:

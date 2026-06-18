@@ -31,6 +31,13 @@ from screening.ui.formatting import (
 
 
 def render_analytics() -> None:
+    """Render the analytics tab.
+
+    Loads all candidates, applies the analytics filters, and renders KPIs, the
+    city map, the screening funnel, drop-off, triage, availability, and stale
+    active candidate sections. Shows informational messages when there is no
+    data.
+    """
     candidates = list_candidates(db_path=SCREENING_DB_PATH)
     if not candidates:
         st.info("No candidates in the database yet.")
@@ -103,6 +110,17 @@ def render_analytics() -> None:
 def render_analytics_filters(
     candidates: list[StoredCandidate],
 ) -> AnalyticsFilters:
+    """Render the analytics filter controls and capture their selections.
+
+    Defaults the date range to the span of candidate start dates.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates used to populate the
+            date range and city options.
+
+    Returns:
+        AnalyticsFilters: The current date range, city, and triage selections.
+    """
     started_dates = [
         started_date
         for started_date in (
@@ -155,6 +173,12 @@ def render_analytics_filters(
 
 
 def render_analytics_kpis(candidates: list[StoredCandidate]) -> None:
+    """Render the analytics KPI metric row.
+
+    Args:
+        candidates (list[StoredCandidate]): The filtered candidates to
+            summarize.
+    """
     kpis = analytics_kpis(candidates)
     columns = st.columns(5)
     columns[0].metric("Screenings started", kpis.started)
@@ -175,6 +199,15 @@ def render_ranked_bar_chart(
     value_title: str,
     color: str,
 ) -> None:
+    """Render a horizontal bar chart with rows ranked by value.
+
+    Args:
+        rows (list[dict[str, object]]): Chart rows to plot.
+        category (str): Key holding each row's category label.
+        value (str): Key holding each row's numeric value.
+        value_title (str): Axis title for the value.
+        color (str): Bar fill color.
+    """
     sorted_rows = ranked_chart_rows(rows, value=value, category=category)
     render_ordered_bar_chart(
         sorted_rows,
@@ -195,6 +228,18 @@ def render_ordered_bar_chart(
     order: list[str],
     color: str,
 ) -> None:
+    """Render a horizontal bar chart with an explicit category order.
+
+    Shows an informational message when there are no rows.
+
+    Args:
+        rows (list[dict[str, object]]): Chart rows to plot.
+        category (str): Key holding each row's category label.
+        value (str): Key holding each row's numeric value.
+        value_title (str): Axis title for the value.
+        order (list[str]): Category labels in the order they should appear.
+        color (str): Bar fill color.
+    """
     if not rows:
         st.info("No data for this chart.")
         return
@@ -231,6 +276,14 @@ def render_ordered_bar_chart(
 
 
 def render_city_map(candidates: list[StoredCandidate]) -> None:
+    """Render the city distribution map and summary table.
+
+    Plots mapped cities as sized, colored bubbles, notes the count of
+    unknown or unmapped candidates, and shows a per-city summary table.
+
+    Args:
+        candidates (list[StoredCandidate]): The filtered candidates to map.
+    """
     distribution = city_distribution_rows(candidates)
     map_rows = [row for row in distribution if row.get("lat") is not None]
     unknown_count = 0
@@ -266,6 +319,13 @@ def render_city_map(candidates: list[StoredCandidate]) -> None:
 
 
 def render_stale_active_candidates(candidates: list[StoredCandidate]) -> None:
+    """Render a table of stale active candidates.
+
+    Shows an informational message when none are stale.
+
+    Args:
+        candidates (list[StoredCandidate]): The filtered candidates to inspect.
+    """
     stale_candidates = stale_active_candidates(candidates)
     if not stale_candidates:
         st.info("No stale active candidates.")

@@ -27,6 +27,27 @@ FAILED_SUMMARY_STATUS = "failed"
 
 @dataclass(frozen=True)
 class StoredCandidate:
+    """A candidate record loaded from the database, without the transcript.
+
+    Attributes:
+        id (str): Candidate identifier.
+        profile (CandidateProfile): The stored candidate profile.
+        status (str): Lifecycle status: "active", "completed", or
+            "disqualified".
+        started_at (str): ISO timestamp when the screening started.
+        updated_at (str): ISO timestamp of the last update.
+        completed_at (str | None): ISO timestamp when finalized, or None.
+        hr_summary (str | None): Generated HR summary, or None.
+        bot_label (str | None): Triage label, or None.
+        summary_status (str | None): Summary state: "pending", "completed", or
+            "failed"; None when no summary was attempted.
+        summary_model (str | None): Model used for the summary, or None.
+        summary_error (str | None): Error message from a failed summary, or
+            None.
+        summary_generated_at (str | None): ISO timestamp when the summary was
+            generated, or None.
+    """
+
     id: str
     profile: CandidateProfile
     status: str
@@ -43,6 +64,28 @@ class StoredCandidate:
 
 @dataclass(frozen=True)
 class CandidateConversationState:
+    """A candidate record loaded together with its full transcript.
+
+    Attributes:
+        candidate_id (str): Candidate identifier.
+        profile (CandidateProfile): The stored candidate profile.
+        messages (list[MessageParam]): The full conversation transcript.
+        status (str): Lifecycle status: "active", "completed", or
+            "disqualified".
+        started_at (str): ISO timestamp when the screening started.
+        updated_at (str): ISO timestamp of the last update.
+        completed_at (str | None): ISO timestamp when finalized, or None.
+        hr_summary (str | None): Generated HR summary, or None.
+        bot_label (str | None): Triage label, or None.
+        summary_status (str | None): Summary state: "pending", "completed", or
+            "failed"; None when no summary was attempted.
+        summary_model (str | None): Model used for the summary, or None.
+        summary_error (str | None): Error message from a failed summary, or
+            None.
+        summary_generated_at (str | None): ISO timestamp when the summary was
+            generated, or None.
+    """
+
     candidate_id: str
     profile: CandidateProfile
     messages: list[MessageParam]
@@ -60,6 +103,13 @@ class CandidateConversationState:
 
 @dataclass(frozen=True)
 class SavedCandidateSession:
+    """Reference to a persisted candidate session.
+
+    Attributes:
+        candidate_id (str): Identifier of the saved candidate.
+        db_path (Path): Path to the database the session was saved to.
+    """
+
     candidate_id: str
     db_path: Path
 
@@ -68,6 +118,18 @@ _initialized_paths: set[Path] = set()
 
 
 def init_database(db_path: str | Path = SCREENING_DB_PATH) -> Path:
+    """Create the database schema if needed and cache that it is initialized.
+
+    Creates the ``candidates`` and ``messages`` tables and their indexes on
+    first use for a given path. Subsequent calls for the same resolved path
+    return immediately.
+
+    Args:
+        db_path (str | Path): Path to the screening database.
+
+    Returns:
+        Path: The resolved database path.
+    """
     database_path = Path(db_path)
     cache_key = database_path.resolve()
     if cache_key in _initialized_paths:
@@ -148,6 +210,22 @@ def create_candidate(
     candidate_id: str | None = None,
     status: str | None = None,
 ) -> str:
+    """Insert a new candidate row and return its identifier.
+
+    Args:
+        profile (CandidateProfile | None): Initial profile; a new empty profile
+            is used when None.
+        db_path (str | Path): Path to the screening database.
+        candidate_id (str | None): Identifier to use; a new UUID is generated
+            when None.
+        status (str | None): Initial status; defaults to "active".
+
+    Returns:
+        str: The identifier of the created candidate.
+
+    Raises:
+        ValueError: If the status is not a valid candidate status.
+    """
     database_path = init_database(db_path)
     profile = profile or CandidateProfile()
     candidate_id = candidate_id or str(uuid4())
@@ -178,6 +256,15 @@ def load_candidate(
     *,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> StoredCandidate | None:
+    """Load a single candidate record by identifier.
+
+    Args:
+        candidate_id (str): Identifier of the candidate to load.
+        db_path (str | Path): Path to the screening database.
+
+    Returns:
+        StoredCandidate | None: The candidate record, or None when not found.
+    """
     database_path = init_database(db_path)
     with _connect(database_path) as connection:
         row = connection.execute(
@@ -210,6 +297,15 @@ def list_candidates(
     *,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> list[StoredCandidate]:
+    """Load all candidate records, most recently updated first.
+
+    Args:
+        db_path (str | Path): Path to the screening database.
+
+    Returns:
+        list[StoredCandidate]: All stored candidates ordered by update time,
+            then start time, then identifier.
+    """
     database_path = init_database(db_path)
     with _connect(database_path) as connection:
         rows = connection.execute(
@@ -237,6 +333,15 @@ def list_candidates(
 
 
 def _stored_candidate_from_row(row: sqlite3.Row) -> StoredCandidate:
+    """Build a StoredCandidate from a database row.
+
+    Args:
+        row (sqlite3.Row): Row from a candidates query including
+            ``profile_json`` and summary columns.
+
+    Returns:
+        StoredCandidate: The reconstructed candidate record.
+    """
     return StoredCandidate(
         id=str(row["id"]),
         profile=CandidateProfile.model_validate(json.loads(row["profile_json"])),
@@ -260,6 +365,22 @@ def save_candidate_profile(
     db_path: str | Path = SCREENING_DB_PATH,
     status: str | None = None,
 ) -> None:
+    """Update an existing candidate's profile columns and status.
+
+    Preserves an existing final status when an "active" status update arrives,
+    and sets ``completed_at`` only the first time the candidate reaches a final
+    status.
+
+    Args:
+        candidate_id (str): Identifier of the candidate to update.
+        profile (CandidateProfile): The profile values to write.
+        db_path (str | Path): Path to the screening database.
+        status (str | None): New status; defaults to "active".
+
+    Raises:
+        ValueError: If the status is not a valid candidate status.
+        KeyError: If no candidate exists for the given identifier.
+    """
     database_path = init_database(db_path)
     candidate_status = _normalize_status(status)
     now = _utc_now()
@@ -317,6 +438,19 @@ def replace_candidate_messages(
     *,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> None:
+    """Replace all stored messages for a candidate with the given transcript.
+
+    Deletes existing messages and re-inserts the provided ones in order.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        messages (list[MessageParam]): The transcript to store.
+        db_path (str | Path): Path to the screening database.
+
+    Raises:
+        KeyError: If no candidate exists for the given identifier.
+        ValueError: If a message has an invalid role.
+    """
     database_path = init_database(db_path)
     with _connect(database_path) as connection:
         _require_candidate(connection, candidate_id)
@@ -332,6 +466,15 @@ def load_candidate_messages(
     *,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> list[MessageParam]:
+    """Load a candidate's transcript in position order.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        db_path (str | Path): Path to the screening database.
+
+    Returns:
+        list[MessageParam]: The stored messages ordered by position.
+    """
     database_path = init_database(db_path)
     with _connect(database_path) as connection:
         rows = connection.execute(
@@ -352,6 +495,16 @@ def load_agent_state(
     *,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> CandidateConversationState | None:
+    """Load a candidate's full conversation state, including the transcript.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        db_path (str | Path): Path to the screening database.
+
+    Returns:
+        CandidateConversationState | None: The full state, or None when the
+            candidate is not found.
+    """
     candidate = load_candidate(candidate_id, db_path=db_path)
     if candidate is None:
         return None
@@ -381,6 +534,26 @@ def save_candidate_session(
     db_path: str | Path = SCREENING_DB_PATH,
     status: str | None = None,
 ) -> SavedCandidateSession:
+    """Persist a candidate's profile and transcript, creating or updating it.
+
+    Creates a new candidate when no identifier is given, otherwise updates the
+    existing one, then replaces its stored messages.
+
+    Args:
+        profile (CandidateProfile): The profile to store.
+        transcript (list[MessageParam]): The transcript to store.
+        candidate_id (str | None): Existing candidate identifier, or None to
+            create a new candidate.
+        db_path (str | Path): Path to the screening database.
+        status (str | None): Status to store; defaults to "active".
+
+    Returns:
+        SavedCandidateSession: The saved candidate identifier and database path.
+
+    Raises:
+        ValueError: If the status is invalid or a message has an invalid role.
+        KeyError: If updating a candidate that does not exist.
+    """
     database_path = init_database(db_path)
     if candidate_id is None:
         candidate_id = create_candidate(
@@ -406,6 +579,16 @@ def mark_candidate_summary_pending(
     db_path: str | Path = SCREENING_DB_PATH,
     model: str | None = None,
 ) -> None:
+    """Mark a candidate's summary as pending and clear prior summary results.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        db_path (str | Path): Path to the screening database.
+        model (str | None): Model that will generate the summary, or None.
+
+    Raises:
+        KeyError: If no candidate exists for the given identifier.
+    """
     database_path = init_database(db_path)
     now = _utc_now()
 
@@ -435,6 +618,19 @@ def save_candidate_summary(
     model: str,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> None:
+    """Store a completed HR summary and triage label for a candidate.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        hr_summary (str): The generated HR summary text.
+        bot_label (str): Triage label to store.
+        model (str): Model that produced the summary.
+        db_path (str | Path): Path to the screening database.
+
+    Raises:
+        ValueError: If the bot label is not valid.
+        KeyError: If no candidate exists for the given identifier.
+    """
     if bot_label not in VALID_BOT_LABELS:
         raise ValueError(f"invalid bot label: {bot_label}")
 
@@ -475,6 +671,20 @@ def save_candidate_summary_failure(
     model: str | None,
     db_path: str | Path = SCREENING_DB_PATH,
 ) -> None:
+    """Record a failed summary generation for a candidate.
+
+    Sets the bot label to "needs_review", marks the summary failed, and stores
+    the error message.
+
+    Args:
+        candidate_id (str): Identifier of the candidate.
+        error (str): Error message describing the failure.
+        model (str | None): Model that was attempted, or None.
+        db_path (str | Path): Path to the screening database.
+
+    Raises:
+        KeyError: If no candidate exists for the given identifier.
+    """
     database_path = init_database(db_path)
     now = _utc_now()
     with _connect(database_path) as connection:
@@ -505,6 +715,15 @@ def save_candidate_summary_failure(
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
+    """Open a SQLite connection with row access and foreign keys enabled.
+
+    Args:
+        db_path (Path): Path to the database file.
+
+    Returns:
+        sqlite3.Connection: A connection with ``Row`` row factory and foreign
+            key enforcement on.
+    """
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
@@ -512,14 +731,38 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _utc_now() -> str:
+    """Return the current UTC time as an ISO 8601 string.
+
+    Returns:
+        str: The current UTC timestamp in ISO format.
+    """
     return datetime.now(UTC).isoformat()
 
 
 def _json_dumps(value: object) -> str:
+    """Serialize a value to compact, ASCII-safe JSON.
+
+    Args:
+        value (object): The value to serialize.
+
+    Returns:
+        str: The JSON string with no extra whitespace and escaped non-ASCII.
+    """
     return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
 
 
 def _normalize_status(status: str | None) -> str:
+    """Default and validate a candidate status value.
+
+    Args:
+        status (str | None): Status to normalize; None becomes "active".
+
+    Returns:
+        str: The validated status.
+
+    Raises:
+        ValueError: If the status is not a valid candidate status.
+    """
     candidate_status = status or ACTIVE_STATUS
     if candidate_status not in VALID_STATUSES:
         raise ValueError(f"invalid candidate status: {candidate_status}")
@@ -527,6 +770,15 @@ def _normalize_status(status: str | None) -> str:
 
 
 def _profile_columns(profile: CandidateProfile) -> dict[str, object]:
+    """Flatten a profile into the candidate table's column values.
+
+    Args:
+        profile (CandidateProfile): The profile to flatten.
+
+    Returns:
+        dict[str, object]: Column name to value mapping, with list fields and
+            the full profile serialized to JSON.
+    """
     experience = profile.prior_delivery_experience
     return {
         "full_name": profile.full_name,
@@ -551,6 +803,15 @@ def _profile_columns(profile: CandidateProfile) -> dict[str, object]:
 
 
 def _require_candidate(connection: sqlite3.Connection, candidate_id: str) -> None:
+    """Assert that a candidate exists, raising if it does not.
+
+    Args:
+        connection (sqlite3.Connection): Open database connection.
+        candidate_id (str): Identifier of the candidate to check.
+
+    Raises:
+        KeyError: If no candidate exists for the given identifier.
+    """
     row = connection.execute(
         "SELECT 1 FROM candidates WHERE id = ?",
         (candidate_id,),
@@ -565,6 +826,17 @@ def _insert_message(
     position: int,
     message: MessageParam,
 ) -> None:
+    """Insert a single message row for a candidate.
+
+    Args:
+        connection (sqlite3.Connection): Open database connection.
+        candidate_id (str): Identifier of the owning candidate.
+        position (int): Zero-based position of the message in the transcript.
+        message (MessageParam): The message to insert.
+
+    Raises:
+        ValueError: If the message role is not "assistant" or "user".
+    """
     role = str(message["role"])
     if role not in {"assistant", "user"}:
         raise ValueError(f"invalid message role: {role}")

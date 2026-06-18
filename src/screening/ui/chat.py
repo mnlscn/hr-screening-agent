@@ -13,6 +13,14 @@ from screening.ui.state import load_current_candidate
 
 
 def render_chat_view() -> ChatAgent | None:
+    """Render the candidate chat tab and return its agent.
+
+    Shows an error and renders nothing when no API key is configured.
+
+    Returns:
+        ChatAgent | None: The active chat agent, or None when no API key is
+            available.
+    """
     if not has_api_key():
         st.error(f"{ANTHROPIC_API_KEY_ENV} is missing. The HR dashboard is available.")
         return None
@@ -24,6 +32,17 @@ def render_chat_view() -> ChatAgent | None:
 
 
 def render_chat(agent: ChatAgent, *, finalized: bool) -> None:
+    """Render the chat transcript and handle a new user message.
+
+    Displays existing messages, accepts input when not finalized, streams the
+    assistant reply, surfaces memory and extraction warnings, and persists the
+    session after each turn.
+
+    Args:
+        agent (ChatAgent): The agent driving the conversation.
+        finalized (bool): Whether the screening is finalized, which disables
+            input.
+    """
     messages_container = st.container(
         border=True,
         height=CHAT_WINDOW_HEIGHT,
@@ -73,6 +92,11 @@ def render_chat(agent: ChatAgent, *, finalized: bool) -> None:
 
 
 def render_message(message: MessageParam) -> None:
+    """Render a single chat message in its role's bubble.
+
+    Args:
+        message (MessageParam): The message to display.
+    """
     role = "assistant" if message["role"] == "assistant" else "user"
     with st.chat_message(role):
         st.markdown(message_text(message))

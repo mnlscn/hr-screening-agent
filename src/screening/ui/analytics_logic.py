@@ -24,6 +24,17 @@ from screening.ui.formatting import (
 
 @dataclass(frozen=True)
 class AnalyticsFilters:
+    """Active filter selections for the analytics tab.
+
+    Attributes:
+        start_date (date | None): Inclusive lower bound on the start date, or
+            None for no lower bound.
+        end_date (date | None): Inclusive upper bound on the start date, or None
+            for no upper bound.
+        city_zone (str): Selected city, or the "All" sentinel.
+        triage (str): Selected analytics outcome title, or the "All" sentinel.
+    """
+
     start_date: date | None
     end_date: date | None
     city_zone: str
@@ -32,12 +43,36 @@ class AnalyticsFilters:
 
 @dataclass(frozen=True)
 class DurationStats:
+    """Aggregate screening-duration statistics.
+
+    Attributes:
+        average_minutes (float | None): Mean screening duration in minutes, or
+            None when no durations are available.
+        median_minutes (float | None): Median screening duration in minutes, or
+            None when no durations are available.
+    """
+
     average_minutes: float | None
     median_minutes: float | None
 
 
 @dataclass(frozen=True)
 class AnalyticsKpis:
+    """Headline KPIs computed for the analytics tab.
+
+    Attributes:
+        started (int): Number of screenings started.
+        completed (int): Number of completed screenings.
+        completion_rate (float): Completed divided by started, or 0 when none
+            started.
+        qualified (int): Number of candidates labeled "eligible".
+        needs_review (int): Number of candidates triaged as "needs_review".
+        average_duration_minutes (float | None): Mean duration in minutes, or
+            None when unavailable.
+        median_duration_minutes (float | None): Median duration in minutes, or
+            None when unavailable.
+    """
+
     started: int
     completed: int
     completion_rate: float
@@ -53,6 +88,17 @@ def ranked_chart_rows(
     value: str,
     category: str,
 ) -> list[dict[str, object]]:
+    """Sort chart rows by value descending, breaking ties by category.
+
+    Args:
+        rows (list[dict[str, object]]): Chart rows to sort.
+        value (str): Key holding the numeric value to rank by.
+        category (str): Key holding the category label used as a tiebreaker.
+
+    Returns:
+        list[dict[str, object]]: The rows sorted by descending value then
+            ascending category.
+    """
     return sorted(
         rows,
         key=lambda row: (-numeric_row_value(row, value), str(row[category])),
@@ -60,6 +106,15 @@ def ranked_chart_rows(
 
 
 def numeric_row_value(row: dict[str, object], key: str) -> float:
+    """Read a numeric value from a chart row, defaulting to 0.
+
+    Args:
+        row (dict[str, object]): The chart row.
+        key (str): Key to read.
+
+    Returns:
+        float: The value as a float, or 0 when missing or non-numeric.
+    """
     value = row.get(key)
     if isinstance(value, int | float):
         return float(value)
@@ -70,6 +125,15 @@ def filter_analytics_candidates(
     candidates: list[StoredCandidate],
     filters: AnalyticsFilters,
 ) -> list[StoredCandidate]:
+    """Filter candidates by the analytics filter selections.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to filter.
+        filters (AnalyticsFilters): The active filter selections.
+
+    Returns:
+        list[StoredCandidate]: Candidates matching all active filters.
+    """
     return [
         candidate
         for candidate in candidates
@@ -81,6 +145,16 @@ def candidate_matches_analytics_filters(
     candidate: StoredCandidate,
     filters: AnalyticsFilters,
 ) -> bool:
+    """Check whether a candidate matches the analytics filters.
+
+    Args:
+        candidate (StoredCandidate): The candidate to test.
+        filters (AnalyticsFilters): The active filter selections.
+
+    Returns:
+        bool: True when the candidate passes the date range, city, and triage
+            filters.
+    """
     started_date = candidate_started_date(candidate.started_at)
     if filters.start_date is not None:
         if started_date is None or started_date < filters.start_date:
@@ -103,6 +177,14 @@ def candidate_matches_analytics_filters(
 
 
 def analytics_kpis(candidates: list[StoredCandidate]) -> AnalyticsKpis:
+    """Compute headline KPIs for a candidate selection.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates in the current selection.
+
+    Returns:
+        AnalyticsKpis: Counts, completion rate, and duration statistics.
+    """
     started = len(candidates)
     completed = sum(1 for candidate in candidates if candidate.status == "completed")
     duration_stats = duration_stats_for_candidates(candidates)
@@ -124,6 +206,15 @@ def analytics_kpis(candidates: list[StoredCandidate]) -> AnalyticsKpis:
 
 
 def duration_stats_for_candidates(candidates: list[StoredCandidate]) -> DurationStats:
+    """Compute average and median screening duration over candidates.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to measure.
+
+    Returns:
+        DurationStats: Mean and median durations in minutes, both None when no
+            candidate has a measurable duration.
+    """
     durations = [
         duration
         for duration in (
@@ -140,6 +231,15 @@ def duration_stats_for_candidates(candidates: list[StoredCandidate]) -> Duration
 
 
 def candidate_duration_minutes(candidate: StoredCandidate) -> float | None:
+    """Compute a candidate's screening duration in minutes.
+
+    Args:
+        candidate (StoredCandidate): The candidate to measure.
+
+    Returns:
+        float | None: The duration in minutes, or None when the candidate is
+            unfinished, has unparseable timestamps, or has a negative duration.
+    """
     if candidate.completed_at is None:
         return None
     started_at = parse_timestamp(candidate.started_at)
@@ -155,6 +255,15 @@ def candidate_duration_minutes(candidate: StoredCandidate) -> float | None:
 def funnel_completion_rows(
     candidates: list[StoredCandidate],
 ) -> list[dict[str, object]]:
+    """Count how many candidates completed each required field.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to tally.
+
+    Returns:
+        list[dict[str, object]]: One row per required field with its display
+            ``stage`` title and a ``completed`` count.
+    """
     return [
         {
             "stage": FIELD_TITLES[field],
@@ -169,10 +278,25 @@ def funnel_completion_rows(
 
 
 def funnel_stage_order() -> list[str]:
+    """Return funnel stage titles in required-field order.
+
+    Returns:
+        list[str]: Display titles for the required fields in canonical order.
+    """
     return [FIELD_TITLES[field] for field in REQUIRED_FIELDS]
 
 
 def profile_field_is_complete(candidate: StoredCandidate, field: str) -> bool:
+    """Report whether a single profile field is complete for a candidate.
+
+    Args:
+        candidate (StoredCandidate): The candidate to inspect.
+        field (str): The field name to check.
+
+    Returns:
+        bool: True when the field is neither missing nor awaiting
+            clarification.
+    """
     profile = candidate.profile
     return (
         field not in profile.missing_fields
@@ -181,6 +305,16 @@ def profile_field_is_complete(candidate: StoredCandidate, field: str) -> bool:
 
 
 def dropoff_stage_rows(candidates: list[StoredCandidate]) -> list[dict[str, object]]:
+    """Count candidates by the field where they dropped off.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to tally.
+
+    Returns:
+        list[dict[str, object]]: One row per drop-off field with its display
+            ``stage`` title and a ``candidates`` count, sorted by count
+            descending.
+    """
     counts: dict[str, int] = {}
     for candidate in candidates:
         stage = dropoff_stage(candidate)
@@ -198,6 +332,15 @@ def dropoff_stage_rows(candidates: list[StoredCandidate]) -> list[dict[str, obje
 
 
 def dropoff_stage(candidate: StoredCandidate) -> str | None:
+    """Determine the field where a candidate is currently stalled.
+
+    Args:
+        candidate (StoredCandidate): The candidate to inspect.
+
+    Returns:
+        str | None: The first clarification or missing field, or None when the
+            candidate has finished and has a complete profile.
+    """
     if candidate.status != "active" and candidate.profile.is_complete:
         return None
     if candidate.profile.clarification_fields:
@@ -210,6 +353,19 @@ def dropoff_stage(candidate: StoredCandidate) -> str | None:
 def city_distribution_rows(
     candidates: list[StoredCandidate],
 ) -> list[dict[str, object]]:
+    """Build per-city map rows with counts, eligibility, and styling.
+
+    Candidates whose city is unknown or has no coordinates are aggregated into
+    a single "Unknown" row without map coordinates.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to aggregate.
+
+    Returns:
+        list[dict[str, object]]: One row per mapped city with count, eligible
+            count and share, coordinates, bubble size, and color, plus an
+            optional unmapped "Unknown" row.
+    """
     city_counts: dict[str, dict[str, int]] = {}
     unknown_count = 0
     for candidate in candidates:
@@ -261,6 +417,17 @@ def city_distribution_rows(
 def city_summary_rows(
     distribution_rows: list[dict[str, object]],
 ) -> list[dict[str, object]]:
+    """Build a display-ready city summary table from distribution rows.
+
+    Args:
+        distribution_rows (list[dict[str, object]]): Rows from
+            :func:`city_distribution_rows`.
+
+    Returns:
+        list[dict[str, object]]: Rows with title-cased columns for city,
+            candidate count, eligible count, and formatted eligible share,
+            sorted by count descending.
+    """
     return [
         {
             "City": str(row["city"]),
@@ -276,10 +443,27 @@ def city_summary_rows(
 
 
 def city_bubble_size(count: int) -> int:
+    """Compute a map bubble size for a city candidate count.
+
+    Args:
+        count (int): Number of candidates in the city.
+
+    Returns:
+        int: The scaled bubble size, never below the base scale.
+    """
     return max(MAP_BUBBLE_SIZE_SCALE, count * MAP_BUBBLE_SIZE_SCALE)
 
 
 def eligible_share_color(eligible_share: float) -> str:
+    """Map an eligible share to a bubble color.
+
+    Args:
+        eligible_share (float): Fraction of eligible candidates in the city.
+
+    Returns:
+        str: Green for shares of 0.5 or more, amber for any positive share, red
+            for zero.
+    """
     if eligible_share >= 0.5:
         return "#16A34A"
     if eligible_share > 0:
@@ -290,6 +474,15 @@ def eligible_share_color(eligible_share: float) -> str:
 def analytics_outcome_rows(
     candidates: list[StoredCandidate],
 ) -> list[dict[str, object]]:
+    """Count candidates per analytics outcome, omitting empty outcomes.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to tally.
+
+    Returns:
+        list[dict[str, object]]: One row per non-empty outcome with its display
+            ``outcome`` title and ``count``.
+    """
     counts = {outcome: 0 for outcome in ANALYTICS_OUTCOME_TITLES}
     for candidate in candidates:
         counts[analytics_outcome(candidate)] += 1
@@ -301,6 +494,16 @@ def analytics_outcome_rows(
 
 
 def analytics_outcome(candidate: StoredCandidate) -> str:
+    """Classify a candidate into an analytics outcome bucket.
+
+    Args:
+        candidate (StoredCandidate): The candidate to classify.
+
+    Returns:
+        str: "active_without_summary" for active unsummarized candidates, the
+            bot label when "eligible" or "not_eligible", otherwise
+            "needs_review".
+    """
     if candidate.status == "active" and candidate.bot_label is None:
         return "active_without_summary"
     if candidate.bot_label in {"eligible", "not_eligible"}:
@@ -309,6 +512,15 @@ def analytics_outcome(candidate: StoredCandidate) -> str:
 
 
 def availability_rows(candidates: list[StoredCandidate]) -> list[dict[str, object]]:
+    """Count availability preferences among completed or eligible candidates.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to tally.
+
+    Returns:
+        list[dict[str, object]]: One row per availability value with its
+            ``availability`` label and ``count``, sorted by count descending.
+    """
     counts: dict[str, int] = {}
     for candidate in candidates:
         if candidate.status != "completed" and candidate.bot_label != "eligible":
@@ -333,6 +545,16 @@ def stale_active_candidates(
     *,
     now: datetime | None = None,
 ) -> list[StoredCandidate]:
+    """Return active candidates not updated within the staleness window.
+
+    Args:
+        candidates (list[StoredCandidate]): Candidates to inspect.
+        now (datetime | None): Reference time; defaults to the current UTC time.
+
+    Returns:
+        list[StoredCandidate]: Active candidates whose last update is older than
+            ``STALE_ACTIVE_AFTER``.
+    """
     now = now or datetime.now(UTC)
     stale_candidates = []
     for candidate in candidates:

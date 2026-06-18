@@ -12,6 +12,12 @@ from screening.ui.styles import APP_STYLES
 
 
 def render_app() -> None:
+    """Render the full Streamlit app: chat, dashboard, and analytics tabs.
+
+    Loads environment variables, configures the page and styles, builds the
+    three tabs, and renders the sidebar based on whether a chat agent is
+    active.
+    """
     load_dotenv()
     st.set_page_config(page_title="Screening", layout="wide")
     apply_styles()
@@ -37,6 +43,7 @@ def render_app() -> None:
 
 
 def apply_styles() -> None:
+    """Inject the app's custom CSS into the Streamlit page."""
     st.markdown(APP_STYLES, unsafe_allow_html=True)
 
 
