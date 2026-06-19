@@ -1,6 +1,8 @@
 """LLM response helpers: token estimation and text extraction."""
 
-from anthropic.types import MessageParam
+from typing import TypeGuard
+
+from anthropic.types import Message, MessageParam, TextBlock
 
 
 def count_tokens(messages: list[MessageParam]) -> int:
@@ -31,17 +33,19 @@ def count_tokens(messages: list[MessageParam]) -> int:
     return total
 
 
-def extract_text(response):
+def extract_text(response: Message) -> str:
     """Concatenate the text of all text blocks in an Anthropic response.
 
     Args:
-        response: An Anthropic message response with a ``content`` block list.
+        response (Message): An Anthropic message response with a ``content``
+            block list.
 
     Returns:
         str: The joined text of every block whose type is "text".
     """
-    return "".join(
-        block.text
-        for block in response.content
-        if getattr(block, "type", None) == "text"
-    )
+    return "".join(block.text for block in response.content if _is_text_block(block))
+
+
+def _is_text_block(block: object) -> TypeGuard[TextBlock]:
+    """Return whether a response content block carries text."""
+    return getattr(block, "type", None) == "text"
