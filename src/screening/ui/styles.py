@@ -65,5 +65,24 @@ APP_STYLES = """
         font-weight: 650;
         min-height: 2.45rem;
     }
+
+    div[data-testid="stSidebar"] .st-key-candidate_list .stButton > button {
+        justify-content: flex-start;
+        text-align: left;
+        min-height: 3.2rem;
+        padding: 0.5rem 0.75rem;
+        border: none;
+        background: transparent;
+        border-radius: 10px;
+    }
+
+    div[data-testid="stSidebar"] .st-key-candidate_list .stButton > button:hover {
+        background: #e9eef5;
+    }
+
+    div[data-testid="stSidebar"] .st-key-candidate_list .stButton > button[kind="primary"] {
+        background: #d9fdd3;
+        color: #111b21;
+    }
 </style>
 """

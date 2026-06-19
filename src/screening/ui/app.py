@@ -23,7 +23,7 @@ def render_app() -> None:
     configure_logging()
     st.set_page_config(page_title="Screening", layout="wide")
     apply_styles()
-    st.title("Lucia Screening")
+    st.title("Grupo Sazón Screening")
 
     chat_agent: ChatAgent | None = None
     chat_tab, dashboard_tab, analytics_tab = st.tabs(

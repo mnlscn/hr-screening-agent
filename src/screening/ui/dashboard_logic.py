@@ -149,9 +149,7 @@ def candidate_display_name(candidate: StoredCandidate) -> str:
         str: The candidate's full name, or a "Candidate <short id>" fallback
             when no name is available.
     """
-    return format_value(candidate.profile.full_name).replace("-", "") or (
-        f"Candidate {short_candidate_id(candidate.id)}"
-    )
+    return format_value(candidate.profile.full_name).replace("-", "") or ("Candidate")
 
 
 def candidate_card_label(candidate: StoredCandidate) -> str:

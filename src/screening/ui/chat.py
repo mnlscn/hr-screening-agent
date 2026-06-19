@@ -18,6 +18,7 @@ from screening.application.session import save_current_session
 from screening.observability import bind_context, exception_metadata
 from screening.ui.constants import CHAT_WINDOW_HEIGHT
 from screening.ui.formatting import message_text
+from screening.ui.profile import render_profile
 from screening.ui.state import get_or_create_agent, has_api_key, is_finalized
 from screening.ui.state import load_current_candidate
 
@@ -67,6 +68,8 @@ def render_chat(agent: ChatAgent, *, finalized: bool) -> None:
 
     with input_container:
         prompt = st.chat_input("Message Lucia", disabled=finalized)
+        with st.expander("Profile", expanded=False):
+            render_profile(agent.profile, show_heading=False)
         log_panel_slot = st.empty()
 
     with messages_container:

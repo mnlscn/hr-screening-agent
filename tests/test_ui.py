@@ -81,6 +81,7 @@ def test_render_app_uses_injected_agent_without_anthropic(monkeypatch):
     )
     monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_sidebar, "list_candidates", lambda *, db_path: [])
 
     app = AppTest.from_function(_run_ui_app)
     app.run()
@@ -104,6 +105,7 @@ def test_chat_submit_streams_and_saves_with_injected_agent(monkeypatch):
     )
     monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_sidebar, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(
         ui_chat,
         "save_current_session",
@@ -136,6 +138,7 @@ def test_finish_button_finalizes_with_injected_agent(monkeypatch):
     )
     monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_sidebar, "list_candidates", lambda *, db_path: [])
 
     def fake_finalize(saved_agent):
         finalized_candidate_ids.append(saved_agent.candidate_id)
@@ -262,6 +265,7 @@ def test_dashboard_open_chat_resumes_candidate(monkeypatch):
     monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
     monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [candidate])
     monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_sidebar, "list_candidates", lambda *, db_path: [])
     monkeypatch.setattr(
         ui_state, "start_candidate_session", lambda: FakeUiAgent("current")
     )
@@ -279,6 +283,64 @@ def test_dashboard_open_chat_resumes_candidate(monkeypatch):
 
     assert not app.exception
     assert resumed_candidate_ids == ["dashboard-1"]
+
+
+def test_sidebar_lists_candidates_and_opens_chat(monkeypatch):
+    agent = FakeUiAgent("candidate-1")
+    candidate = _stored_candidate(agent)
+    sidebar_candidates = [
+        _stored_candidate(FakeUiAgent("candidate-1"), full_name="Maria Garcia"),
+        _stored_candidate(FakeUiAgent("candidate-2"), full_name="Bruno Banner"),
+    ]
+    resumed_candidate_ids: list[str] = []
+
+    monkeypatch.setenv(ANTHROPIC_API_KEY_ENV, "test-key")
+    monkeypatch.setattr(ui_state, "start_candidate_session", lambda: agent)
+    monkeypatch.setattr(
+        ui_state,
+        "load_candidate",
+        lambda candidate_id, *, db_path: candidate,
+    )
+    monkeypatch.setattr(ui_dashboard, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(ui_analytics, "list_candidates", lambda *, db_path: [])
+    monkeypatch.setattr(
+        ui_sidebar, "list_candidates", lambda *, db_path: sidebar_candidates
+    )
+
+    def fake_resume(candidate_id: str):
+        resumed_candidate_ids.append(candidate_id)
+        return FakeUiAgent(candidate_id)
+
+    monkeypatch.setattr(ui_state, "resume_candidate_session", fake_resume)
+
+    app = AppTest.from_function(_run_ui_app)
+    app.run()
+
+    assert not app.exception
+    # The Profile expander now lives in the chat tab.
+    assert any(expander.label == "Profile" for expander in app.expander)
+
+    # One sidebar row per candidate, labelled by name.
+    sidebar_buttons = [
+        button
+        for button in app.button
+        if button.key and button.key.startswith("sidebar_candidate_")
+    ]
+    assert {button.label for button in sidebar_buttons} == {
+        "Maria Garcia",
+        "Bruno Banner",
+    }
+
+    # Clicking a row resumes and opens that candidate's chat.
+    second_row = next(
+        button
+        for button in sidebar_buttons
+        if button.key == "sidebar_candidate_candidate-2"
+    )
+    second_row.click().run()
+
+    assert not app.exception
+    assert resumed_candidate_ids == ["candidate-2"]
 
 
 def test_analytics_kpis_handle_empty_candidates_and_duration_stats():
