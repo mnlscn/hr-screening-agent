@@ -29,10 +29,15 @@ NUMERIC_FIELDS = frozenset({"prior_delivery_experience.years"})
 CATEGORICAL_FIELDS = frozenset(
     {
         "drivers_license",
+        "full_name_status",
         "city_zone",
         "city_zone_status",
         "availability",
+        "availability_status",
         "preferred_schedule",
+        "preferred_schedule_status",
+        "prior_delivery_experience_status",
+        "start_date_status",
         "conversation_language",
     }
 )

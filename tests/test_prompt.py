@@ -25,7 +25,12 @@ def test_extraction_prompt_lives_with_prompts():
     assert "service_areas" in EXTRACTION_SYSTEM_PROMPT
     assert "drivers_license" in EXTRACTION_SYSTEM_PROMPT
     assert "conversation_language" in EXTRACTION_SYSTEM_PROMPT
-    assert "Use null for a field when it is unknown" in EXTRACTION_SYSTEM_PROMPT
+    assert "Omit a field when it is unknown" in EXTRACTION_SYSTEM_PROMPT
+    assert "Do not output null values" in EXTRACTION_SYSTEM_PROMPT
+    assert "candidate answer evidence" in EXTRACTION_SYSTEM_PROMPT
+    assert "Do not omit or hide a real but unclear candidate answer" in (
+        EXTRACTION_SYSTEM_PROMPT
+    )
     assert "valid for driving in Spain or Mexico" in EXTRACTION_SYSTEM_PROMPT
     assert "Any driving license issued by an EU country is valid" in (
         EXTRACTION_SYSTEM_PROMPT
@@ -34,10 +39,15 @@ def test_extraction_prompt_lives_with_prompts():
     assert "tiempo completo to Full-time" in EXTRACTION_SYSTEM_PROMPT
     assert "medio tiempo to Part-time" in EXTRACTION_SYSTEM_PROMPT
     assert "fines de semana" in EXTRACTION_SYSTEM_PROMPT
+    assert "findes" in EXTRACTION_SYSTEM_PROMPT
+    assert '"updates"' in EXTRACTION_SYSTEM_PROMPT
+    assert '"field"' in EXTRACTION_SYSTEM_PROMPT
+    assert "field availability" in EXTRACTION_SYSTEM_PROMPT
     assert "mañana" in EXTRACTION_SYSTEM_PROMPT
     assert "tarde to Afternoon" in EXTRACTION_SYSTEM_PROMPT
     assert "noche to Evening" in EXTRACTION_SYSTEM_PROMPT
-    assert "set years to 0 and platform to null" in EXTRACTION_SYSTEM_PROMPT
+    assert "field start_date" in EXTRACTION_SYSTEM_PROMPT
+    assert "set years to 0, omit platform" in EXTRACTION_SYSTEM_PROMPT
 
 
 def test_chat_prompt_handles_code_switching():
@@ -148,3 +158,14 @@ def test_clarification_fields_are_prioritized():
 
     assert '"next_field_to_collect": "drivers_license"' in prompt
     assert "valid for driving in Spain or Mexico" in prompt
+
+
+def test_new_clarification_fields_have_specific_question_goals():
+    profile = CandidateProfile(raw_availability="depende de la semana")
+
+    assert get_next_field(profile) == "availability"
+
+    prompt = build_system_prompt(profile)
+
+    assert '"next_field_to_collect": "availability"' in prompt
+    assert "whether they prefer full-time, part-time, or weekends" in prompt

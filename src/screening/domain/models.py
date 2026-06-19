@@ -9,6 +9,7 @@ from screening.domain.service_areas import load_service_area_names
 
 DriverLicense = Literal["Yes", "No", "Pending", "Unknown"]
 CityZoneStatus = Literal["Matched", "Needs clarification", "Unsupported"]
+AnswerStatus = Literal["Matched", "Needs clarification"]
 Availability = Literal["Full-time", "Part-time", "Weekends"]
 PreferredSchedule = Literal["Morning", "Afternoon", "Evening", "Flexible"]
 ConversationLanguage = Literal["English", "Spanish", "Mixed"]
@@ -34,9 +35,18 @@ REQUIRED_FIELDS = (
 )
 
 PROFILE_UPDATE_FIELDS = REQUIRED_FIELDS + (
+    "full_name_status",
     "raw_drivers_license",
     "raw_city_zone",
     "city_zone_status",
+    "raw_availability",
+    "availability_status",
+    "raw_preferred_schedule",
+    "preferred_schedule_status",
+    "raw_prior_delivery_experience",
+    "prior_delivery_experience_status",
+    "raw_start_date",
+    "start_date_status",
     "conversation_language",
 )
 
@@ -114,6 +124,8 @@ class CandidateProfile(BaseModel):
     Attributes:
         full_name (str | None): Candidate's full name; considered complete only
             with both a first and last name.
+        full_name_status (AnswerStatus | None): Whether the provided name is
+            complete or needs a surname follow-up.
         raw_drivers_license (str | None): Verbatim driver-license answer.
         drivers_license (DriverLicense | None): Normalized license status: one
             of "Yes", "No", "Pending", or "Unknown".
@@ -126,11 +138,25 @@ class CandidateProfile(BaseModel):
             conversation language: "English", "Spanish", or "Mixed".
         availability (Availability | None): Normalized availability:
             "Full-time", "Part-time", or "Weekends".
+        raw_availability (str | None): Verbatim availability answer when the
+            candidate answered this field.
+        availability_status (AnswerStatus | None): Whether availability was
+            confidently normalized or needs clarification.
         preferred_schedule (PreferredSchedule | None): Normalized schedule:
             "Morning", "Afternoon", "Evening", or "Flexible".
+        raw_preferred_schedule (str | None): Verbatim preferred-schedule answer.
+        preferred_schedule_status (AnswerStatus | None): Whether schedule was
+            confidently normalized or needs clarification.
         prior_delivery_experience (DeliveryExperience | None): Prior delivery
             experience details.
+        raw_prior_delivery_experience (str | None): Verbatim delivery-experience
+            answer.
+        prior_delivery_experience_status (AnswerStatus | None): Whether
+            delivery experience was fully captured or needs clarification.
         start_date (str | None): Candidate's reported start date.
+        raw_start_date (str | None): Verbatim start-date answer.
+        start_date_status (AnswerStatus | None): Whether the start date is
+            actionable or needs clarification.
         is_complete (bool): True when no fields are missing or need
             clarification. Derived.
         is_disqualified (bool): True when any disqualification reason applies.
@@ -145,16 +171,25 @@ class CandidateProfile(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     full_name: str | None = None
+    full_name_status: AnswerStatus | None = None
     raw_drivers_license: str | None = None
     drivers_license: DriverLicense | None = None
     raw_city_zone: str | None = None
     city_zone: str | None = None
     city_zone_status: CityZoneStatus | None = None
     conversation_language: ConversationLanguage | None = None
+    raw_availability: str | None = None
     availability: Availability | None = None
+    availability_status: AnswerStatus | None = None
+    raw_preferred_schedule: str | None = None
     preferred_schedule: PreferredSchedule | None = None
+    preferred_schedule_status: AnswerStatus | None = None
+    raw_prior_delivery_experience: str | None = None
     prior_delivery_experience: DeliveryExperience | None = None
+    prior_delivery_experience_status: AnswerStatus | None = None
+    raw_start_date: str | None = None
     start_date: str | None = None
+    start_date_status: AnswerStatus | None = None
     is_complete: bool = False
     is_disqualified: bool = False
     disqualification_reasons: list[str] = Field(default_factory=list)
@@ -165,6 +200,10 @@ class CandidateProfile(BaseModel):
         "full_name",
         "raw_drivers_license",
         "raw_city_zone",
+        "raw_availability",
+        "raw_preferred_schedule",
+        "raw_prior_delivery_experience",
+        "raw_start_date",
         "city_zone",
         "start_date",
         mode="before",
@@ -215,6 +254,12 @@ class CandidateProfile(BaseModel):
         Returns:
             Self: The same instance with derived fields refreshed.
         """
+        full_name_status = _answer_status(
+            self.full_name_status,
+            has_value=has_first_and_last_name(self.full_name),
+            has_answer=bool(self.full_name),
+        )
+
         city_zone_status = self.city_zone_status
         if city_zone_status is None:
             if self.city_zone:
@@ -222,21 +267,63 @@ class CandidateProfile(BaseModel):
             elif self.raw_city_zone:
                 city_zone_status = "Needs clarification"
 
+        availability_status = _answer_status(
+            self.availability_status,
+            has_value=self.availability is not None,
+            has_answer=bool(self.raw_availability),
+        )
+        preferred_schedule_status = _answer_status(
+            self.preferred_schedule_status,
+            has_value=self.preferred_schedule is not None,
+            has_answer=bool(self.raw_preferred_schedule),
+        )
+        prior_delivery_experience_status = _answer_status(
+            self.prior_delivery_experience_status,
+            has_value=(
+                self.prior_delivery_experience is not None
+                and self.prior_delivery_experience.is_complete()
+            ),
+            has_answer=(
+                bool(self.raw_prior_delivery_experience)
+                or self.prior_delivery_experience is not None
+            ),
+        )
+        start_date_status = _answer_status(
+            self.start_date_status,
+            has_value=self.start_date is not None,
+            has_answer=bool(self.raw_start_date),
+        )
+
         missing_fields = []
         for field in REQUIRED_FIELDS:
-            value = getattr(self, field)
-            if value is None:
-                missing_fields.append(field)
-            elif field == "full_name" and not has_first_and_last_name(value):
-                missing_fields.append(field)
-            elif field == "prior_delivery_experience" and not value.is_complete():
+            if _field_is_missing(
+                self,
+                field,
+                city_zone_status=city_zone_status,
+                availability_status=availability_status,
+                preferred_schedule_status=preferred_schedule_status,
+                prior_delivery_experience_status=prior_delivery_experience_status,
+                start_date_status=start_date_status,
+            ):
                 missing_fields.append(field)
 
         clarification_fields = []
+        if full_name_status == "Needs clarification":
+            clarification_fields.append("full_name")
         if self.drivers_license in {"Pending", "Unknown"}:
+            clarification_fields.append("drivers_license")
+        elif self.drivers_license is None and self.raw_drivers_license:
             clarification_fields.append("drivers_license")
         if city_zone_status == "Needs clarification":
             clarification_fields.append("city_zone")
+        if availability_status == "Needs clarification":
+            clarification_fields.append("availability")
+        if preferred_schedule_status == "Needs clarification":
+            clarification_fields.append("preferred_schedule")
+        if prior_delivery_experience_status == "Needs clarification":
+            clarification_fields.append("prior_delivery_experience")
+        if start_date_status == "Needs clarification":
+            clarification_fields.append("start_date")
 
         reasons = []
         if self.drivers_license == "No":
@@ -244,7 +331,16 @@ class CandidateProfile(BaseModel):
         if city_zone_status == "Unsupported":
             reasons.append("outside_service_area")
 
+        object.__setattr__(self, "full_name_status", full_name_status)
         object.__setattr__(self, "city_zone_status", city_zone_status)
+        object.__setattr__(self, "availability_status", availability_status)
+        object.__setattr__(self, "preferred_schedule_status", preferred_schedule_status)
+        object.__setattr__(
+            self,
+            "prior_delivery_experience_status",
+            prior_delivery_experience_status,
+        )
+        object.__setattr__(self, "start_date_status", start_date_status)
         object.__setattr__(self, "missing_fields", missing_fields)
         object.__setattr__(self, "clarification_fields", clarification_fields)
         object.__setattr__(self, "disqualification_reasons", reasons)
@@ -277,7 +373,65 @@ class CandidateProfile(BaseModel):
             if value is not None:
                 current[field] = value
 
-        if updates.city_zone_status in {"Needs clarification", "Unsupported"}:
+        for status_field, value_field in (
+            ("full_name_status", "full_name"),
+            ("city_zone_status", "city_zone"),
+            ("availability_status", "availability"),
+            ("preferred_schedule_status", "preferred_schedule"),
+            ("prior_delivery_experience_status", "prior_delivery_experience"),
+            ("start_date_status", "start_date"),
+        ):
+            if getattr(updates, status_field) == "Needs clarification":
+                current[value_field] = getattr(updates, value_field)
+
+        if updates.city_zone_status == "Unsupported":
             current["city_zone"] = updates.city_zone
 
         return CandidateProfile.model_validate(current)
+
+
+def _answer_status(
+    status: AnswerStatus | None,
+    *,
+    has_value: bool,
+    has_answer: bool,
+) -> AnswerStatus | None:
+    """Infer a reusable answer status from canonical and raw evidence."""
+    if has_value:
+        return status or "Matched"
+    if status == "Matched":
+        return "Needs clarification" if has_answer else None
+    if status is None and has_answer:
+        return "Needs clarification"
+    return status
+
+
+def _field_is_missing(
+    profile: CandidateProfile,
+    field: str,
+    *,
+    city_zone_status: CityZoneStatus | None,
+    availability_status: AnswerStatus | None,
+    preferred_schedule_status: AnswerStatus | None,
+    prior_delivery_experience_status: AnswerStatus | None,
+    start_date_status: AnswerStatus | None,
+) -> bool:
+    """Report whether a required field has no answer evidence at all."""
+    if field == "full_name":
+        return profile.full_name is None
+    if field == "drivers_license":
+        return profile.drivers_license is None and profile.raw_drivers_license is None
+    if field == "city_zone":
+        return profile.city_zone is None and city_zone_status is None
+    if field == "availability":
+        return profile.availability is None and availability_status is None
+    if field == "preferred_schedule":
+        return profile.preferred_schedule is None and preferred_schedule_status is None
+    if field == "prior_delivery_experience":
+        return (
+            profile.prior_delivery_experience is None
+            and prior_delivery_experience_status is None
+        )
+    if field == "start_date":
+        return profile.start_date is None and start_date_status is None
+    return getattr(profile, field) is None

@@ -52,8 +52,13 @@ REQUIRED_FIELD_LABELS = {
 }
 
 CLARIFICATION_FIELD_LABELS = {
+    "full_name": "their surname or last name",
     "drivers_license": "whether their driver's license is valid for driving in Spain or Mexico",
     "city_zone": "their own city or zone in Spain or Mexico where they want to work",
+    "availability": "whether they prefer full-time, part-time, or weekends",
+    "preferred_schedule": "whether they prefer morning, afternoon, evening, or flexible schedule",
+    "prior_delivery_experience": "the missing delivery experience detail: years or platform",
+    "start_date": "when they can start in a clear, actionable way",
 }
 
 

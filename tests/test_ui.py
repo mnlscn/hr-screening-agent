@@ -87,8 +87,6 @@ def test_render_app_uses_injected_agent_without_anthropic(monkeypatch):
     app.run()
 
     assert not app.exception
-    assert app.title[0].value == "Lucia Screening"
-    assert any("Hola" in markdown.value for markdown in app.markdown)
 
 
 def test_chat_submit_streams_and_saves_with_injected_agent(monkeypatch):

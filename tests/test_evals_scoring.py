@@ -38,6 +38,7 @@ def test_score_case_matches_exact_soft_and_nested_fields():
             "city_zone": "Madrid",
             "city_zone_status": "Matched",
             "availability": "Full-time",
+            "availability_status": "Matched",
             "preferred_schedule": "Morning",
             "prior_delivery_experience": {
                 "years": 2,
@@ -164,6 +165,10 @@ def test_flatten_expected_rejects_raw_and_derived_fields():
     with pytest.raises(ValueError, match="derived fields are not scored"):
         flatten_expected({"missing_fields": []})
 
+    assert flatten_expected({"availability_status": "Needs clarification"}) == {
+        "availability_status": "Needs clarification"
+    }
+
 
 def test_load_cases_rejects_malformed_expected_field(tmp_path):
     case_path = tmp_path / "bad_cases.jsonl"
@@ -186,7 +191,7 @@ def test_load_cases_rejects_malformed_expected_field(tmp_path):
 def test_bundled_cases_are_valid_and_unique():
     cases = load_cases()
 
-    assert 30 <= len(cases) <= 35
+    assert 30 <= len(cases) <= 40
     assert len({case.id for case in cases}) == len(cases)
     assert any(case.id == "city-alias-cdmx" for case in cases)
     assert any(case.current_profile.full_name == "Luis Perez" for case in cases)

@@ -10,7 +10,6 @@ from anthropic.types import MessageParam
 from screening.domain.models import CandidateProfile, DeliveryExperience
 from screening.domain.service_areas import load_service_area_names
 from screening.llm.extraction import (
-    EXTRACTION_FIELDS,
     EXTRACTION_OUTPUT_CONFIG,
     CandidateExtractor,
 )
@@ -52,14 +51,6 @@ def extraction_schema() -> dict[str, Any]:
     return cast(dict[str, Any], extraction_output_format()["schema"])
 
 
-def city_zone_string_schema() -> dict[str, Any]:
-    city_zone = extraction_schema()["properties"]["city_zone"]
-    for branch in city_zone["anyOf"]:
-        if branch.get("type") == "string":
-            return branch
-    raise AssertionError("city_zone schema has no string branch")
-
-
 def test_extractor_prompt_includes_context_without_output_shape():
     extractor = CandidateExtractor(client=cast(Any, object()))
 
@@ -82,38 +73,83 @@ def test_extraction_output_config_uses_strict_json_schema():
     assert extraction_output_format()["type"] == "json_schema"
     schema = extraction_schema()
     schema_text = json.dumps(schema)
+    properties = schema["properties"]
 
     assert schema["additionalProperties"] is False
-    assert schema["required"] == list(EXTRACTION_FIELDS)
+    assert schema["required"] == ["updates"]
     assert "$defs" not in schema
     assert "$ref" not in schema_text
     assert "default" not in schema_text
     assert "title" not in schema_text
     assert "description" not in schema_text
-    assert "enum" not in city_zone_string_schema()
-    experience = schema["properties"]["prior_delivery_experience"]["anyOf"][0]
-    assert experience["additionalProperties"] is False
-    assert experience["required"] == ["years", "platform"]
+    assert "anyOf" not in schema_text
+    assert schema_text.count('"type"') < 12
+    updates = properties["updates"]
+    assert updates["type"] == "array"
+    item = updates["items"]
+    assert item["additionalProperties"] is False
+    assert item["required"] == ["field"]
+    assert item["properties"]["field"]["enum"] == [
+        "conversation_language",
+        "full_name",
+        "drivers_license",
+        "city_zone",
+        "availability",
+        "preferred_schedule",
+        "prior_delivery_experience",
+        "start_date",
+    ]
+    assert item["properties"]["status"]["enum"] == [
+        "Matched",
+        "Needs clarification",
+        "Unsupported",
+    ]
 
 
 def test_extract_uses_structured_output_and_merges_profile():
     client = FakeClient(
         json.dumps(
             {
-                "conversation_language": "Spanish",
-                "full_name": "Maria Garcia",
-                "raw_drivers_license": "si",
-                "drivers_license": "Yes",
-                "raw_city_zone": "Madrid",
-                "city_zone": "Madrid",
-                "city_zone_status": "Matched",
-                "availability": "Full-time",
-                "preferred_schedule": "Morning",
-                "prior_delivery_experience": {
-                    "years": 2,
-                    "platform": "Glovo",
-                },
-                "start_date": "next Monday",
+                "updates": [
+                    {"field": "conversation_language", "value": "Spanish"},
+                    {
+                        "field": "full_name",
+                        "value": "Maria Garcia",
+                        "status": "Matched",
+                    },
+                    {"field": "drivers_license", "raw": "si", "value": "Yes"},
+                    {
+                        "field": "city_zone",
+                        "raw": "Madrid",
+                        "value": "Madrid",
+                        "status": "Matched",
+                    },
+                    {
+                        "field": "availability",
+                        "raw": "tiempo completo",
+                        "value": "Full-time",
+                        "status": "Matched",
+                    },
+                    {
+                        "field": "preferred_schedule",
+                        "raw": "manana",
+                        "value": "Morning",
+                        "status": "Matched",
+                    },
+                    {
+                        "field": "prior_delivery_experience",
+                        "raw": "2 anos en Glovo",
+                        "years": 2,
+                        "platform": "Glovo",
+                        "status": "Matched",
+                    },
+                    {
+                        "field": "start_date",
+                        "raw": "next Monday",
+                        "value": "next Monday",
+                        "status": "Matched",
+                    },
+                ]
             }
         )
     )
@@ -129,14 +165,16 @@ def test_extract_uses_structured_output_and_merges_profile():
     assert profile.full_name == "Maria Garcia"
     assert profile.drivers_license == "Yes"
     assert profile.city_zone == "Madrid"
+    assert profile.raw_availability == "tiempo completo"
+    assert profile.availability_status == "Matched"
     assert profile.prior_delivery_experience == DeliveryExperience(
         years=2,
         platform="Glovo",
     )
 
 
-def test_extract_null_experience_does_not_overwrite_existing_experience():
-    client = FakeClient(json.dumps({"prior_delivery_experience": None}))
+def test_extract_omitted_experience_does_not_overwrite_existing_experience():
+    client = FakeClient(json.dumps({"updates": []}))
     extractor = CandidateExtractor(client=cast(Any, client))
     current_profile = CandidateProfile(
         prior_delivery_experience=DeliveryExperience(years=1, platform="Uber Eats")
@@ -153,13 +191,44 @@ def test_extract_null_experience_does_not_overwrite_existing_experience():
     )
 
 
+def test_extract_normalizes_high_confidence_raw_availability_alias():
+    client = FakeClient(
+        json.dumps(
+            {
+                "updates": [
+                    {
+                        "field": "availability",
+                        "raw": "findes",
+                        "status": "Needs clarification",
+                    }
+                ]
+            }
+        )
+    )
+    extractor = CandidateExtractor(client=cast(Any, client))
+
+    profile = extractor.extract(
+        messages=[cast(MessageParam, {"role": "user", "content": "findes"})],
+        current_profile=CandidateProfile(),
+    )
+
+    assert profile.availability == "Weekends"
+    assert profile.availability_status == "Matched"
+    assert "availability" not in profile.clarification_fields
+
+
 def test_extract_rejects_non_canonical_city_zone_locally():
     client = FakeClient(
         json.dumps(
             {
-                "raw_city_zone": "Paris",
-                "city_zone": "Paris",
-                "city_zone_status": "Matched",
+                "updates": [
+                    {
+                        "field": "city_zone",
+                        "raw": "Paris",
+                        "value": "Paris",
+                        "status": "Matched",
+                    }
+                ]
             }
         )
     )

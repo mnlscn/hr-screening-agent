@@ -170,15 +170,27 @@ def profile_rows(profile: CandidateProfile) -> list[tuple[str, str]]:
     """
     return [
         ("Full name", format_value(profile.full_name)),
+        ("Full name status", format_value(profile.full_name_status)),
         ("Drivers license", format_value(profile.drivers_license)),
         ("Raw city or zone", format_value(profile.raw_city_zone)),
         ("City or zone", format_value(profile.city_zone)),
         ("City status", format_value(profile.city_zone_status)),
         ("Language", format_value(profile.conversation_language)),
+        ("Raw availability", format_value(profile.raw_availability)),
         ("Availability", format_value(profile.availability)),
+        ("Availability status", format_value(profile.availability_status)),
+        ("Raw schedule", format_value(profile.raw_preferred_schedule)),
         ("Schedule", format_value(profile.preferred_schedule)),
+        ("Schedule status", format_value(profile.preferred_schedule_status)),
+        ("Raw experience", format_value(profile.raw_prior_delivery_experience)),
         ("Experience", format_experience(profile.prior_delivery_experience)),
+        (
+            "Experience status",
+            format_value(profile.prior_delivery_experience_status),
+        ),
+        ("Raw start date", format_value(profile.raw_start_date)),
         ("Start date", format_value(profile.start_date)),
+        ("Start date status", format_value(profile.start_date_status)),
     ]
 
 
