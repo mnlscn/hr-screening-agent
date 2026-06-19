@@ -187,3 +187,10 @@ With more time, in rough priority order:
 - **Quality evals.** Golden extraction evals can now be run manually against a live model;
   conversation-quality evals and LLM-as-judge rubrics remain future work.
 - **Voice agent** (bonus tier) and an **ATS integration** API spec.
+
+
+## Deliverables:
+
+- **[docs/process-design.md - Phase 1](docs/process-design.md)** 
+
+- **[docs/sample-conversations.md](docs/process-design.md)**
