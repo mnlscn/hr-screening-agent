@@ -169,7 +169,7 @@ class CandidateSummarizer:
             raise
 
         summary = CandidateSummary(
-            bot_label=_resolve_bot_label(profile, baseline_label, payload.bot_label),
+            bot_label=_resolve_bot_label(baseline_label, payload.bot_label),
             hr_summary=payload.hr_summary,
         )
         bind_context(
@@ -270,28 +270,26 @@ def determine_bot_label(
 
 
 def _resolve_bot_label(
-    profile: CandidateProfile,
     baseline_label: BotLabel,
     model_label: BotLabel,
 ) -> BotLabel:
     """Reconcile the model's label against the deterministic baseline.
 
-    Guards against the model overriding a "needs_review" or "not_eligible"
-    baseline that the profile state still supports.
+    The model may agree with the deterministic result or make it more cautious
+    by selecting ``needs_review``. Any other disagreement also resolves to
+    ``needs_review`` so the model can neither invent a hard failure nor upgrade
+    one recorded by the rule layer.
 
     Args:
-        profile (CandidateProfile): The extracted candidate profile.
         baseline_label (BotLabel): The deterministic baseline label.
         model_label (BotLabel): The label proposed by the model.
 
     Returns:
         BotLabel: The final reconciled triage label.
     """
-    if baseline_label == "needs_review" and not profile.disqualification_reasons:
-        return "needs_review"
-    if baseline_label == "not_eligible" and model_label == "eligible":
-        return "needs_review"
-    return model_label
+    if model_label == baseline_label:
+        return baseline_label
+    return "needs_review"
 
 
 def _duration_ms(started_at: float) -> float:

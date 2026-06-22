@@ -79,9 +79,9 @@ class DeliveryExperience(BaseModel):
             None when unknown.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    years: float | None = None
+    years: float | None = Field(default=None, ge=0)
     platform: str | None = None
 
     @field_validator("platform", mode="before")
@@ -266,6 +266,15 @@ class CandidateProfile(BaseModel):
                 city_zone_status = "Matched"
             elif self.raw_city_zone:
                 city_zone_status = "Needs clarification"
+
+        if city_zone_status == "Matched" and self.city_zone is None:
+            raise ValueError("a matched city_zone_status requires a city_zone")
+        if city_zone_status in {"Needs clarification", "Unsupported"} and (
+            self.city_zone is not None
+        ):
+            raise ValueError(
+                "a non-matched city_zone_status cannot include a city_zone"
+            )
 
         availability_status = _answer_status(
             self.availability_status,

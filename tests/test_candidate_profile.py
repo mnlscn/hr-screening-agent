@@ -101,6 +101,27 @@ def test_llm_normalized_typo_is_eligible():
     assert profile.city_zone == "Barcelona"
 
 
+def test_matched_city_status_requires_a_canonical_city_value():
+    with pytest.raises(
+        ValidationError,
+        match="a matched city_zone_status requires a city_zone",
+    ):
+        CandidateProfile(raw_city_zone="Madrid", city_zone_status="Matched")
+
+
+@pytest.mark.parametrize("status", ["Needs clarification", "Unsupported"])
+def test_non_matched_city_status_rejects_a_canonical_city_value(status: str):
+    with pytest.raises(
+        ValidationError,
+        match="a non-matched city_zone_status cannot include a city_zone",
+    ):
+        CandidateProfile(
+            raw_city_zone="Madrid",
+            city_zone="Madrid",
+            city_zone_status=unchecked(status),
+        )
+
+
 def test_ambiguous_city_needs_clarification():
     profile = CandidateProfile(
         raw_city_zone="centro",
@@ -155,6 +176,11 @@ def test_no_delivery_experience_is_complete_experience_answer():
     assert profile.prior_delivery_experience_status == "Matched"
     assert profile.prior_delivery_experience.is_complete()
     assert "prior_delivery_experience" not in profile.missing_fields
+
+
+def test_delivery_experience_rejects_negative_years():
+    with pytest.raises(ValidationError):
+        DeliveryExperience(years=-1, platform="Glovo")
 
 
 def test_raw_ambiguous_availability_needs_clarification_not_missing():

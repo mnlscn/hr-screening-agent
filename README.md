@@ -193,4 +193,4 @@ With more time, in rough priority order:
 
 - **[docs/process-design.md - Phase 1](docs/process-design.md)** 
 
-- **[docs/sample-conversations.md](docs/process-design.md)**
+- **[docs/sample-conversations.md](docs/sample-conversations.md)**

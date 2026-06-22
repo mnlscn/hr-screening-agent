@@ -7,9 +7,10 @@ from typing import Any, cast
 import pytest
 from anthropic.types import MessageParam
 
-from screening.domain.models import CandidateProfile, DeliveryExperience
+from screening.domain.models import BotLabel, CandidateProfile, DeliveryExperience
 from screening.llm.summary import (
     CandidateSummarizer,
+    _resolve_bot_label,
     determine_bot_label,
 )
 
@@ -89,6 +90,28 @@ def test_determine_bot_label_for_incomplete_or_failed_extraction():
     assert determine_bot_label(complete_profile(), extraction_failed=True) == (
         "needs_review"
     )
+
+
+@pytest.mark.parametrize(
+    ("baseline_label", "model_label", "expected_label"),
+    [
+        ("eligible", "eligible", "eligible"),
+        ("eligible", "needs_review", "needs_review"),
+        ("eligible", "not_eligible", "needs_review"),
+        ("not_eligible", "not_eligible", "not_eligible"),
+        ("not_eligible", "needs_review", "needs_review"),
+        ("not_eligible", "eligible", "needs_review"),
+        ("needs_review", "needs_review", "needs_review"),
+        ("needs_review", "eligible", "needs_review"),
+        ("needs_review", "not_eligible", "needs_review"),
+    ],
+)
+def test_resolve_bot_label_only_allows_agreement_or_more_caution(
+    baseline_label: BotLabel,
+    model_label: BotLabel,
+    expected_label: BotLabel,
+):
+    assert _resolve_bot_label(baseline_label, model_label) == expected_label
 
 
 def test_summarizer_uses_metadata_and_full_transcript():
