@@ -189,7 +189,7 @@ With more time, in rough priority order:
 - **Voice agent** (bonus tier) and an **ATS integration** API spec.
 
 
-## Deliverables:
+## Additional docs:
 
 - **[docs/process-design.md - Phase 1](docs/process-design.md)** 
 
